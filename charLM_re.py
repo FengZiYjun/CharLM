@@ -35,33 +35,33 @@ def preprocess():
     word_embedding.weight.requires_grad = False
     word_emb_matrix = word_embedding.weight
 
-    torch.save(word_emb_matrix, "./word_emb_matrix.pt") 
-    torch.save(char_embedding, "./char_embedding.pt")
-    torch.save(char_table, "./char_table.pt")
-    torch.save(vocabulary, "./vocabulary.pt")
-    torch.save(reverse_vocab, "reverse_vocab.pt")
+    torch.save(word_emb_matrix, "cache/word_emb_matrix.pt") 
+    torch.save(char_embedding, "cache/char_embedding.pt")
+    torch.save(char_table, "cache/char_table.pt")
+    torch.save(vocabulary, "cache/vocabulary.pt")
+    torch.save(reverse_vocab, "cache/reverse_vocab.pt")
 
     return word_embedding_dim, char_embedding_dim, vocab_size, num_char
 
 
-word_embedding_dim, char_embedding_dim, vocab_size, num_char = preprocess()
+#word_embedding_dim, char_embedding_dim, vocab_size, num_char = preprocess()
 
-"""
-word_emb_matrix = torch.load("./word_emb_matrix.pt")
-char_embedding = torch.load("./char_embedding.pt")
-char_table = torch.load("./char_table.pt")
-vocabulary = torch.load("./vocabulary.pt")
-reverse_vocab =torch.load("reverse_vocab.pt")
+
+word_emb_matrix = torch.load("cache/word_emb_matrix.pt")
+char_embedding = torch.load("cache/char_embedding.pt")
+char_table = torch.load("cache/char_table.pt")
+vocabulary = torch.load("cache/vocabulary.pt")
+reverse_vocab =torch.load("cache/reverse_vocab.pt")
 vocab_size = len(vocabulary)
 num_char = len(char_table)
 word_embedding_dim = 300
 char_embedding_dim = 15
-"""
+
 
 print("Embedding built. Start building network.")
 
 
-USE_GPU = True
+USE_GPU = False
 cnn_batch_size = 32
 lstm_seq_len = 8
 lstm_batch_size = 4
@@ -91,6 +91,7 @@ def train():
 
     #X = torch.load("X.pt")
     # [batch_size, in_channel, height, width]
+    """
     X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
     X = X.unsqueeze(0)
     X = torch.transpose(X, 0, 1)
@@ -98,6 +99,13 @@ def train():
     #valid_X = torch.load("valid_X.pt")
     valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
     valid_X = torch.transpose(valid_X, 0, 1)
+    
+    torch.save(X, "train_X.pt")
+    torch.save(valid_X, "valid_X.pt")
+    """
+
+    X = torch.load("cache/train_X.pt")
+    valid_X = torch.load("cache/valid_X.pt")
 
 
     if USE_GPU is True and torch.cuda.is_available():
@@ -126,9 +134,9 @@ def train():
         output_valid = net(batch_valid, word_emb_matrix)
         output_valid = torch.transpose(output_valid, 0, 1)
 
-        loss_valid = get_loss(output_valid, valid_words, vocabulary, cnn_batch_size, epoch)
+        loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
         PPL = torch.exp(loss_valid / lstm_seq_len)
-        print("[epoch {}] PPL={}".format(epoch, PPL))
+        print("[epoch {}] PPL={}".format(epoch, PPL.data))
 
         if old_PPL == 0:
             old_PPL = PPL
@@ -158,9 +166,18 @@ def train():
             net.zero_grad()
             loss.backward()
             optimizer.step()
-
+            
+            
             if t % 300 == 0:
-                print("[epoch {} step {}] loss={}".format(epoch+1, t+1, loss.data/cnn_batch_size))
+                
+                output_valid = net(batch_valid, word_emb_matrix)             
+                output_valid = torch.transpose(output_valid, 0, 1)
+                loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
+                PPL = torch.exp(loss_valid / lstm_seq_len)
+
+                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data/cnn_batch_size))
+                print("\tvalid loss={}".format(loss_valid.data / cnn_batch_size))
+                print("\tPPL={}".format(PPL.data))
 
 
 
@@ -169,12 +186,18 @@ def train():
 
 
 def test():
+    
     text_words = read_data("./valid.txt")
-        
-
+    print("loaded words. start seq2vec.")    
+    
     X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
     X = X.unsqueeze(0)
     X = torch.transpose(X, 0, 1)
+    
+    print("finish seq2vec.")
+    torch.save(X, "test_X.pt")
+    
+    #X = torch.load("text_X.pt")
 
     global net
     global word_emb_matrix
@@ -218,8 +241,8 @@ def test():
     print("Accuracy={}%".format(100 * accuracy))
 
 
-train()
-torch.save(net.static_dict(), "./model.pt")
+#train()
+#torch.save(net.static_dict(), "cache/model.pt")
 
 test()
 
