@@ -186,15 +186,13 @@ def train():
 
 
 def test():
-    
     text_words = read_data("./valid.txt")
-    print("loaded words. start seq2vec.")    
     
+    print("doing seq2vec") 
     X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
     X = X.unsqueeze(0)
     X = torch.transpose(X, 0, 1)
-    
-    print("finish seq2vec.")
+    print("seq2vec done.")
     torch.save(X, "test_X.pt")
     
     #X = torch.load("text_X.pt")
@@ -206,7 +204,6 @@ def test():
         X = X.cuda()
         net = net.cuda()
         word_emb_matrix = word_emb_matrix.cuda()
-        truth_ix = truth_ix.cuda()
         torch.cuda.manual_seed(1024)
 
 
@@ -231,14 +228,17 @@ def test():
 
 
     predict_ix = torch.cat(predict_ix, 0)
-    length = predict_ix.size()[0]
-
-    truth_ix = torch.cat([torch.LongTensor(vocabulary[text_words[ix]]) for ix in range(2, length)], 0)
-    truth_ix = Variable(truth_ix, requires_grad=False)
-
-    accuracy = torch.sum(predict_ix == truth_ix) / length
+    length = int(predict_ix.size()[0])
     
-    print("Accuracy={}%".format(100 * accuracy))
+    
+    ix_list = [vocabulary[text_words[ix]] for ix in range(1, length+1)]
+
+    truth_ix = torch.LongTensor(ix_list)
+    truth_ix = Variable(truth_ix, requires_grad=False)
+    tmp = predict_ix == truth_ix
+    accuracy = torch.sum(tmp.int()) / length
+    
+    print("Accuracy={}%".format(100 * accuracy.data))
 
 
 #train()
