@@ -44,9 +44,9 @@ def preprocess():
     return word_embedding_dim, char_embedding_dim, vocab_size, num_char
 
 
+word_embedding_dim, char_embedding_dim, vocab_size, num_char = preprocess()
 
-
-
+"""
 word_emb_matrix = torch.load("./word_emb_matrix.pt")
 char_embedding = torch.load("./char_embedding.pt")
 char_table = torch.load("./char_table.pt")
@@ -56,7 +56,7 @@ vocab_size = len(vocabulary)
 num_char = len(char_table)
 word_embedding_dim = 300
 char_embedding_dim = 15
-
+"""
 
 print("Embedding built. Start building network.")
 
