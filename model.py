@@ -7,6 +7,19 @@ import torch.nn.functional as F
 
 
 class charLM(nn.Module):
+    """CNN + highway network + LSTM
+    # Input: 
+        4D tensor with shape [batch_size, in_channel, height, width]
+    # Output:
+        2D Tensor with shape [batch_size, vocab_size]
+    # Arguments:
+        char_emb_dim: the size of each character's embedding
+        word_emb_dim: the size of each word's embedding
+        lstm_seq_len: num of words in a LSTM sequence / num of time steps that LSTM goes through
+        lstm_batch_size: num of sequences in a "LSTM" batch
+        vocab_size: num of unique words
+        use_gpu: True or False
+    """
     def __init__(self, char_emb_dim, word_emb_dim, 
                 lstm_seq_len, lstm_batch_size, vocab_size,
                 use_gpu):
@@ -35,6 +48,8 @@ class charLM(nn.Module):
                     )
             )
 
+        self.batch_norm = nn.BatchNorm1d(self.highway_input_dim, affine=False)
+
         # highway net
         self.fc1 = nn.Linear(self.highway_input_dim, self.highway_input_dim, bias=True)
         self.fc2 = nn.Linear(self.highway_input_dim, self.highway_input_dim, bias=True)
@@ -58,6 +73,7 @@ class charLM(nn.Module):
 
         # output layer
         self.emb_bias = Variable(torch.zeros(self.vocab_size))
+        self.dropout = nn.Dropout(p=0.5)
 
         if self.use_gpu is True:
             for x in range(len(self.convolutions)):
@@ -67,17 +83,20 @@ class charLM(nn.Module):
             self.hidden = (self.hidden[0].cuda(), self.hidden[1].cuda())
             self.lstm = self.lstm.cuda()
             self.emb_bias = self.emb_bias.cuda()
+            self.dropout = self.dropout.cuda()
 
 
     def forward(self, x, word_emb):
         x = self.conv_layers(x)
+        x = self.batch_norm(x)
         x = self.highway_layers(x)
 
-        cnn_batch_size = x.size()[0]
+        cnn_batch_size = x.size()[0] 
         lstm_batch_size = cnn_batch_size // self.lstm_seq_len
+
         output, self.hidden = self.lstm(x.view(self.lstm_seq_len, lstm_batch_size, -1), self.hidden)
         
-        output = torch.transpose(output, 0, 1)
+        output = self.dropout(torch.transpose(output, 0, 1))
         # (batch, seq_len, hidden_size)
         batch = [] 
 
@@ -98,7 +117,7 @@ class charLM(nn.Module):
             chosen = chosen.view(chosen.size()[0], -1)
             # (cnn_batch_size, out_channel)
             chosen_list.append(chosen)
-            
+            # (cnn_batch_size, total_num_filers)
         return torch.cat(chosen_list, 1)
 
     def highway_layers(self, y):

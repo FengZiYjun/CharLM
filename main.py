@@ -5,14 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import os
 import model
 from utilities import *
 
 """
 Issues: 
-apply drop out to hidden-to-output ???
-test PPL of valid set
-test model saver
+
 """
 
 def preprocess():
@@ -41,11 +40,12 @@ def preprocess():
     torch.save(vocabulary, "cache/vocabulary.pt")
     torch.save(reverse_vocab, "cache/reverse_vocab.pt")
 
-    return word_embedding_dim, char_embedding_dim, vocab_size, num_char
 
+word_embedding_dim = 300
+char_embedding_dim = 15
 
-#word_embedding_dim, char_embedding_dim, vocab_size, num_char = preprocess()
-
+if os.path.exists("cache/word_emb_matrix.pt") is False:
+    preprocess()
 
 word_emb_matrix = torch.load("cache/word_emb_matrix.pt")
 char_embedding = torch.load("cache/char_embedding.pt")
@@ -54,17 +54,16 @@ vocabulary = torch.load("cache/vocabulary.pt")
 reverse_vocab =torch.load("cache/reverse_vocab.pt")
 vocab_size = len(vocabulary)
 num_char = len(char_table)
-word_embedding_dim = 300
-char_embedding_dim = 15
 
 
 print("Embedding built. Start building network.")
 
 
-USE_GPU = False
-cnn_batch_size = 32
-lstm_seq_len = 8
-lstm_batch_size = 4
+USE_GPU = True
+cnn_batch_size = 700
+
+lstm_seq_len = 35  # BPTT for 35 time steps
+lstm_batch_size = 20
 # cnn_batch_size == lstm_seq_len * lstm_batch_size
 
 net = model.charLM(char_embedding_dim, 
@@ -74,8 +73,11 @@ net = model.charLM(char_embedding_dim,
                    vocab_size,
                    use_gpu=USE_GPU)
 
-print("Network built.")
+for param in net.parameters():
+    nn.init.uniform(param.data, -0.05, 0.05)
 
+
+print("Network built. Start making inputs.")
 
 
 def train():
@@ -89,23 +91,21 @@ def train():
     global word_emb_matrix
     global net
 
-    #X = torch.load("X.pt")
-    # [batch_size, in_channel, height, width]
-    """
-    X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
-    X = X.unsqueeze(0)
-    X = torch.transpose(X, 0, 1)
+    if os.path.exists("cache/train_X.pt"):
+        X = torch.load("cache/train_X.pt")
+        valid_X = torch.load("cache/valid_X.pt")
+    else:
+        X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
+        X = X.unsqueeze(0)
+        X = torch.transpose(X, 0, 1)
 
-    #valid_X = torch.load("valid_X.pt")
-    valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
-    valid_X = torch.transpose(valid_X, 0, 1)
+        valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
+        valid_X = torch.transpose(valid_X, 0, 1)
+        
+        torch.save(X, "cache/train_X.pt")
+        torch.save(valid_X, "cache/valid_X.pt")
     
-    torch.save(X, "train_X.pt")
-    torch.save(valid_X, "valid_X.pt")
-    """
 
-    X = torch.load("cache/train_X.pt")
-    valid_X = torch.load("cache/valid_X.pt")
 
 
     if USE_GPU is True and torch.cuda.is_available():
@@ -116,7 +116,7 @@ def train():
         torch.cuda.manual_seed(1024)
 
 
-    num_epoch = 1
+    num_epoch = 1  # 25 epochs in the paper
     num_iter_per_epoch = X.size()[0] // cnn_batch_size
     
     print("Start training.")
@@ -141,8 +141,10 @@ def train():
         if old_PPL == 0:
             old_PPL = PPL
         else:
+            print("PPL decrease={}".format(old_PPL - PPL))
             if old_PPL - PPL <= 1.0:
                 leaning_rate /= 2
+                print("halved learning rate")
 
 
         optimizer  = optim.SGD(net.parameters(), 
@@ -165,6 +167,7 @@ def train():
 
             net.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm(net.parameters(), 5, norm_type=2)
             optimizer.step()
             
             
@@ -175,8 +178,8 @@ def train():
                 loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
                 PPL = torch.exp(loss_valid / lstm_seq_len)
 
-                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data/cnn_batch_size))
-                print("\tvalid loss={}".format(loss_valid.data / cnn_batch_size))
+                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data))
+                print("\tvalid loss={}".format(loss_valid.data))
                 print("\tPPL={}".format(PPL.data))
 
 
@@ -186,18 +189,16 @@ def train():
 
 
 def test():
+    text_words = read_data("./test.txt")
     
-    text_words = read_data("./valid.txt")
-    print("loaded words. start seq2vec.")    
+    if os.path.exists("cache/test_X.pt"):
+        X = torch.load("cache/test_X.pt")
+    else:
+        X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
+        X = X.unsqueeze(0)
+        X = torch.transpose(X, 0, 1)    
+        torch.save(X, "cache/test_X.pt")
     
-    X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
-    X = X.unsqueeze(0)
-    X = torch.transpose(X, 0, 1)
-    
-    print("finish seq2vec.")
-    torch.save(X, "test_X.pt")
-    
-    #X = torch.load("text_X.pt")
 
     global net
     global word_emb_matrix
@@ -206,7 +207,6 @@ def test():
         X = X.cuda()
         net = net.cuda()
         word_emb_matrix = word_emb_matrix.cuda()
-        truth_ix = truth_ix.cuda()
         torch.cuda.manual_seed(1024)
 
 
@@ -227,22 +227,32 @@ def test():
         _, targets = torch.max(output, 0)
         
         predict_ix += list(targets)
-        #predict_words += [reverse_vocab[int(ix)] for ix in targets] 
-
 
     predict_ix = torch.cat(predict_ix, 0)
-    length = predict_ix.size()[0]
-
-    truth_ix = torch.cat([torch.LongTensor(vocabulary[text_words[ix]]) for ix in range(2, length)], 0)
-    truth_ix = Variable(truth_ix, requires_grad=False)
-
-    accuracy = torch.sum(predict_ix == truth_ix) / length
+    length = int(predict_ix.size()[0])
     
-    print("Accuracy={}%".format(100 * accuracy))
+    
+    ix_list = [vocabulary[text_words[ix]] for ix in range(1, length+1)]
+
+    truth_ix = torch.LongTensor(ix_list)
+    truth_ix = Variable(truth_ix, requires_grad=False)
+    if USE_GPU is True and torch.cuda.is_available():
+        truth_ix = truth_ix.cuda()
+
+    tmp = predict_ix == truth_ix
+    accuracy = torch.sum(tmp.int()) / length
+    
+    print("Accuracy={}%".format(100 * accuracy.data))
 
 
-#train()
-#torch.save(net.static_dict(), "cache/model.pt")
+
+try:
+    train()
+except KeyboardInterrupt:
+    print('-' * 89)
+    print('Exiting from training early')
+    torch.save(net.state_dict(), "cache/model.pt")
+    print('model saved.')
 
 test()
 
