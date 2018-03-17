@@ -46,7 +46,7 @@ def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no):
         next_word_ix = vocabulary[input_words[next_ix]]
         prediction.append(output[next_word_ix][ix])
 
-    loss = -torch.sum(torch.log(torch.cat(prediction, 0)))
+    loss = -torch.sum(torch.log(torch.cat(prediction, 0))) / cnn_batch_size
     return loss
 
 

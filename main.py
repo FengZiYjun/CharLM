@@ -11,8 +11,6 @@ from utilities import *
 
 """
 Issues: 
-backpropergate for 35 time steps ???
-Parameters initialized over uniform distribution
 
 """
 
@@ -61,10 +59,11 @@ num_char = len(char_table)
 print("Embedding built. Start building network.")
 
 
-USE_GPU = False
-cnn_batch_size = 20
-lstm_seq_len = 10
-lstm_batch_size = 2
+USE_GPU = True
+cnn_batch_size = 700
+
+lstm_seq_len = 35  # BPTT for 35 time steps
+lstm_batch_size = 20
 # cnn_batch_size == lstm_seq_len * lstm_batch_size
 
 net = model.charLM(char_embedding_dim, 
@@ -179,8 +178,8 @@ def train():
                 loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
                 PPL = torch.exp(loss_valid / lstm_seq_len)
 
-                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data/cnn_batch_size))
-                print("\tvalid loss={}".format(loss_valid.data / cnn_batch_size))
+                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data))
+                print("\tvalid loss={}".format(loss_valid.data))
                 print("\tPPL={}".format(PPL.data))
 
 

@@ -77,6 +77,7 @@ class charLM(nn.Module):
 
         cnn_batch_size = x.size()[0]
         lstm_batch_size = cnn_batch_size // self.lstm_seq_len
+        
         output, self.hidden = self.lstm(x.view(self.lstm_seq_len, lstm_batch_size, -1), self.hidden)
         
         output = self.dropout(torch.transpose(output, 0, 1))
