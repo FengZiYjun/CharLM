@@ -5,14 +5,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import os
 import model
 from utilities import *
 
 """
 Issues: 
-apply drop out to hidden-to-output ???
-test PPL of valid set
-test model saver
+backpropergate for 35 time steps ???
+Parameters initialized over uniform distribution
+
 """
 
 def preprocess():
@@ -41,11 +42,12 @@ def preprocess():
     torch.save(vocabulary, "cache/vocabulary.pt")
     torch.save(reverse_vocab, "cache/reverse_vocab.pt")
 
-    return word_embedding_dim, char_embedding_dim, vocab_size, num_char
 
+word_embedding_dim = 300
+char_embedding_dim = 15
 
-#word_embedding_dim, char_embedding_dim, vocab_size, num_char = preprocess()
-
+if os.path.exists("cache/word_emb_matrix.pt") is False:
+    preprocess()
 
 word_emb_matrix = torch.load("cache/word_emb_matrix.pt")
 char_embedding = torch.load("cache/char_embedding.pt")
@@ -54,17 +56,15 @@ vocabulary = torch.load("cache/vocabulary.pt")
 reverse_vocab =torch.load("cache/reverse_vocab.pt")
 vocab_size = len(vocabulary)
 num_char = len(char_table)
-word_embedding_dim = 300
-char_embedding_dim = 15
 
 
 print("Embedding built. Start building network.")
 
 
 USE_GPU = False
-cnn_batch_size = 32
-lstm_seq_len = 8
-lstm_batch_size = 4
+cnn_batch_size = 20
+lstm_seq_len = 10
+lstm_batch_size = 2
 # cnn_batch_size == lstm_seq_len * lstm_batch_size
 
 net = model.charLM(char_embedding_dim, 
@@ -74,8 +74,11 @@ net = model.charLM(char_embedding_dim,
                    vocab_size,
                    use_gpu=USE_GPU)
 
-print("Network built.")
+for param in net.parameters():
+    nn.uniform(param.data, -0.05, 0.05)
+    print(param.data)
 
+print("Network built.")
 
 
 def train():
@@ -89,23 +92,21 @@ def train():
     global word_emb_matrix
     global net
 
-    #X = torch.load("X.pt")
-    # [batch_size, in_channel, height, width]
-    """
-    X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
-    X = X.unsqueeze(0)
-    X = torch.transpose(X, 0, 1)
+    if os.path.exists("cache/train_X.pt"):
+        X = torch.load("cache/train_X.pt")
+        valid_X = torch.load("cache/valid_X.pt")
+    else:
+        X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
+        X = X.unsqueeze(0)
+        X = torch.transpose(X, 0, 1)
 
-    #valid_X = torch.load("valid_X.pt")
-    valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
-    valid_X = torch.transpose(valid_X, 0, 1)
+        valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
+        valid_X = torch.transpose(valid_X, 0, 1)
+        
+        torch.save(X, "cache/train_X.pt")
+        torch.save(valid_X, "cache/valid_X.pt")
     
-    torch.save(X, "train_X.pt")
-    torch.save(valid_X, "valid_X.pt")
-    """
 
-    X = torch.load("cache/train_X.pt")
-    valid_X = torch.load("cache/valid_X.pt")
 
 
     if USE_GPU is True and torch.cuda.is_available():
@@ -141,8 +142,10 @@ def train():
         if old_PPL == 0:
             old_PPL = PPL
         else:
+            print("PPL decrease={}".format(old_PPL - PPL))
             if old_PPL - PPL <= 1.0:
                 leaning_rate /= 2
+                print("halved learning rate")
 
 
         optimizer  = optim.SGD(net.parameters(), 
@@ -165,6 +168,7 @@ def train():
 
             net.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm(net.parameters(), 5, norm_type=2)
             optimizer.step()
             
             
@@ -188,14 +192,14 @@ def train():
 def test():
     text_words = read_data("./valid.txt")
     
-    print("doing seq2vec") 
-    X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
-    X = X.unsqueeze(0)
-    X = torch.transpose(X, 0, 1)
-    print("seq2vec done.")
-    torch.save(X, "test_X.pt")
+    if os.path.exists("cache/test_X.pt"):
+        X = torch.load("cache/text_X.pt")
+    else:
+        X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
+        X = X.unsqueeze(0)
+        X = torch.transpose(X, 0, 1)    
+        torch.save(X, "cache/test_X.pt")
     
-    #X = torch.load("text_X.pt")
 
     global net
     global word_emb_matrix
@@ -214,6 +218,7 @@ def test():
     predict_ix = []
 
     for t in range(num_iter):
+        print("[test batch {}]".format(num_iter))
         batch_input = generator.__next__()
 
         output = net(batch_input, word_emb_matrix)
@@ -224,8 +229,6 @@ def test():
         _, targets = torch.max(output, 0)
         
         predict_ix += list(targets)
-        #predict_words += [reverse_vocab[int(ix)] for ix in targets] 
-
 
     predict_ix = torch.cat(predict_ix, 0)
     length = int(predict_ix.size()[0])
@@ -241,8 +244,13 @@ def test():
     print("Accuracy={}%".format(100 * accuracy.data))
 
 
-#train()
-#torch.save(net.static_dict(), "cache/model.pt")
+
+try:
+    train()
+except KeyboardInterrupt:
+    print('-' * 89)
+    print('Exiting from training early')
+    torch.save(net.static_dict(), "cache/model.pt")
 
 test()
 

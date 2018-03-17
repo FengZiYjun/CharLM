@@ -58,6 +58,7 @@ class charLM(nn.Module):
 
         # output layer
         self.emb_bias = Variable(torch.zeros(self.vocab_size))
+        self.dropout = nn.Dropout(p=0.5)
 
         if self.use_gpu is True:
             for x in range(len(self.convolutions)):
@@ -67,6 +68,7 @@ class charLM(nn.Module):
             self.hidden = (self.hidden[0].cuda(), self.hidden[1].cuda())
             self.lstm = self.lstm.cuda()
             self.emb_bias = self.emb_bias.cuda()
+            self.dropout = self.dropout.cuda()
 
 
     def forward(self, x, word_emb):
@@ -77,7 +79,7 @@ class charLM(nn.Module):
         lstm_batch_size = cnn_batch_size // self.lstm_seq_len
         output, self.hidden = self.lstm(x.view(self.lstm_seq_len, lstm_batch_size, -1), self.hidden)
         
-        output = torch.transpose(output, 0, 1)
+        output = self.dropout(torch.transpose(output, 0, 1))
         # (batch, seq_len, hidden_size)
         batch = [] 
 
