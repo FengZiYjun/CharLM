@@ -74,8 +74,8 @@ net = model.charLM(char_embedding_dim,
                    use_gpu=USE_GPU)
 
 for param in net.parameters():
-    nn.uniform(param.data, -0.05, 0.05)
-    print(param.data)
+    nn.init.uniform(param.data, -0.05, 0.05)
+
 
 print("Network built.")
 
@@ -116,7 +116,7 @@ def train():
         torch.cuda.manual_seed(1024)
 
 
-    num_epoch = 1
+    num_epoch = 1  # 25 epochs in the paper
     num_iter_per_epoch = X.size()[0] // cnn_batch_size
     
     print("Start training.")
@@ -192,7 +192,7 @@ def test():
     text_words = read_data("./valid.txt")
     
     if os.path.exists("cache/test_X.pt"):
-        X = torch.load("cache/text_X.pt")
+        X = torch.load("cache/test_X.pt")
     else:
         X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
         X = X.unsqueeze(0)
@@ -217,7 +217,6 @@ def test():
     predict_ix = []
 
     for t in range(num_iter):
-        print("[test batch {}]".format(num_iter))
         batch_input = generator.__next__()
 
         output = net(batch_input, word_emb_matrix)
@@ -237,6 +236,9 @@ def test():
 
     truth_ix = torch.LongTensor(ix_list)
     truth_ix = Variable(truth_ix, requires_grad=False)
+    if USE_GPU is True and torch.cuda.is_available():
+        truth_ix = truth_ix.cuda()
+
     tmp = predict_ix == truth_ix
     accuracy = torch.sum(tmp.int()) / length
     
@@ -249,7 +251,7 @@ try:
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
-    torch.save(net.static_dict(), "cache/model.pt")
+    torch.save(net.state_dict(), "cache/model.pt")
 
 test()
 
