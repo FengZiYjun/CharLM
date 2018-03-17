@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import os
-import model
+from model import charLM
 from utilities import *
 
 """
@@ -66,12 +66,12 @@ lstm_seq_len = 35  # BPTT for 35 time steps
 lstm_batch_size = 20
 # cnn_batch_size == lstm_seq_len * lstm_batch_size
 
-net = model.charLM(char_embedding_dim, 
-                   word_embedding_dim, 
-                   lstm_seq_len,
-                   lstm_batch_size,
-                   vocab_size,
-                   use_gpu=USE_GPU)
+net = charLM(char_embedding_dim, 
+            word_embedding_dim, 
+            lstm_seq_len,
+            lstm_batch_size,
+            vocab_size,
+            use_gpu=USE_GPU)
 
 for param in net.parameters():
     nn.init.uniform(param.data, -0.05, 0.05)
@@ -134,7 +134,7 @@ def train():
         output_valid = net(batch_valid, word_emb_matrix)
         output_valid = torch.transpose(output_valid, 0, 1)
 
-        loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
+        loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch, lstm_seq_len)
         PPL = torch.exp(loss_valid / lstm_seq_len)
         print("[epoch {}] PPL={}".format(epoch, PPL.data))
 
@@ -163,7 +163,7 @@ def train():
             output = torch.transpose(output, 0, 1)
             
             #distribution = get_distribution(output, word_emb_matrix)
-            loss = get_loss(output, input_words, vocabulary, cnn_batch_size, t)
+            loss = get_loss(output, input_words, vocabulary, cnn_batch_size, t, lstm_seq_len)
 
             net.zero_grad()
             loss.backward()
@@ -175,7 +175,7 @@ def train():
                 
                 output_valid = net(batch_valid, word_emb_matrix)             
                 output_valid = torch.transpose(output_valid, 0, 1)
-                loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch)
+                loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch, lstm_seq_len)
                 PPL = torch.exp(loss_valid / lstm_seq_len)
 
                 print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data))
@@ -189,6 +189,7 @@ def train():
 
 
 def test():
+    print("Start testing.")
     text_words = read_data("./test.txt")
     
     if os.path.exists("cache/test_X.pt"):
@@ -216,6 +217,8 @@ def test():
     predict_words = []
     predict_ix = []
 
+    mean_PPL = []
+
     for t in range(num_iter):
         batch_input = generator.__next__()
 
@@ -223,11 +226,16 @@ def test():
         output = torch.transpose(output, 0, 1)
         # [vocab_size, num_words]
         
+        loss_valid = get_loss(output, text_words, vocabulary, cnn_batch_size, 0, lstm_seq_len)
+        PPL = torch.exp(loss_valid / lstm_seq_len)
+        mean_PPL.append(PPL)
+
         # LongTensor of [num_words]
         _, targets = torch.max(output, 0)
         
         predict_ix += list(targets)
 
+    mean_PPL = torch.cat(mean_PPL, 0)
     predict_ix = torch.cat(predict_ix, 0)
     length = int(predict_ix.size()[0])
     
@@ -240,10 +248,10 @@ def test():
         truth_ix = truth_ix.cuda()
 
     tmp = predict_ix == truth_ix
-    accuracy = torch.sum(tmp.int()) / length
+    accuracy = float(torch.sum(tmp.int())) / float(length)
     
-    print("Accuracy={}%".format(100 * accuracy.data))
-
+    print("Accuracy={0:.4f}%".format(100 * accuracy))
+    print("Final PPL={0:.4f}%".format(float(torch.mean(mean_PPL))))
 
 
 try:

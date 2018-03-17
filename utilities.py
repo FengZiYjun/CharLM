@@ -31,12 +31,14 @@ def get_distribution(output, word_emb_matrix):
 
 
 
-def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no):
+def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no, lstm_seq_len):
+    """ Sum up log prob for a sequence. And average all sequences. """
     # output == Tensor of [vocab_size, batch_size], the predicted distribution
     # input_words == list of strings, the raw text
     # vocabulary == dict of (string: int)
     # cnn_batch_size == int, the size of each batch durng iterations
     # batch_no == int, denotes the i-th batch
+    # Return: loss == FloatTensor of size [1]
     prediction = []
     batch_begin_ix = batch_no * cnn_batch_size
     for ix in range(cnn_batch_size):
@@ -45,8 +47,8 @@ def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no):
             next_ix -= 1
         next_word_ix = vocabulary[input_words[next_ix]]
         prediction.append(output[next_word_ix][ix])
-
-    loss = -torch.sum(torch.log(torch.cat(prediction, 0))) / cnn_batch_size
+    all_loss = torch.log(torch.cat(prediction, 0)).view(-1, lstm_seq_len)
+    loss = torch.mean(-torch.sum(all_loss, 1))
     return loss
 
 
@@ -58,10 +60,12 @@ def char_embedding_lookup(word, char_embedding, char_table):
 
 
 def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
+    """ convert the input strings into character embeddings """
     # input_words == list of string
     # char_embedding == torch.nn.Embedding
     # char_embedding_dim == int
-    # Returns [len(input_words), char_embedding_dim, max_word_len+2]
+    # char_table == list of unique chars
+    # Returns: tensor of shape [len(input_words), char_embedding_dim, max_word_len+2]
     max_word_len = max([len(word) for word in input_words])
     tensor_list = []
     
@@ -93,7 +97,8 @@ def read_data(file_name):
 
 
 def create_char_table(vocabulary):
-    # hack
+    # vocabulary == list of strings, all unique words
+    # Return: list of unique chars
     return list(set([char for word in vocabulary for char in word]))
 
 
