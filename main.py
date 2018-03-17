@@ -77,7 +77,7 @@ for param in net.parameters():
     nn.init.uniform(param.data, -0.05, 0.05)
 
 
-print("Network built.")
+print("Network built. Start making inputs.")
 
 
 def train():
@@ -189,7 +189,7 @@ def train():
 
 
 def test():
-    text_words = read_data("./valid.txt")
+    text_words = read_data("./test.txt")
     
     if os.path.exists("cache/test_X.pt"):
         X = torch.load("cache/test_X.pt")
@@ -252,6 +252,7 @@ except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
     torch.save(net.state_dict(), "cache/model.pt")
+    print('model saved.')
 
 test()
 
