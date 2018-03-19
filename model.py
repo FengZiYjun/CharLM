@@ -87,6 +87,8 @@ class charLM(nn.Module):
 
 
     def forward(self, x, word_emb):
+        # Input: Variable of Tensor with shape [cnn_batch_size, 1, height, width]
+        # Return: Variable of Tensor with shape [cnn_batch_size, vocab_size]
         x = self.conv_layers(x)
         x = self.batch_norm(x)
         x = self.highway_layers(x)

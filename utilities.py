@@ -55,7 +55,8 @@ def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no, lstm_seq
 def char_embedding_lookup(word, char_embedding, char_table):
     # use the simplest lookup method. change later.
     vec = [char_table.index(s) for s in word]
-    encoded_word = char_embedding(Variable(torch.LongTensor(vec))) # [len(vec), char_embedding_dim]
+     # [len(vec), char_embedding_dim]
+    encoded_word = char_embedding(Variable(torch.LongTensor(vec), requires_grad=False)).data
     return torch.transpose(encoded_word, 0, 1)
 
 
@@ -69,8 +70,11 @@ def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
     max_word_len = max([len(word) for word in input_words])
     tensor_list = []
     
-    start_column = Variable(torch.ones(char_embedding_dim, 1))
-    end_column = Variable(torch.ones(char_embedding_dim, 1))
+    #start_column = Variable(torch.ones(char_embedding_dim, 1))
+    #end_column = Variable(torch.ones(char_embedding_dim, 1))
+    start_column = torch.ones(char_embedding_dim, 1)
+    end_column = torch.ones(char_embedding_dim, 1)
+
     
     for word in input_words:
         # convert string to word embedding
@@ -78,7 +82,7 @@ def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
         # add start and end columns
         word_encoding = torch.cat([start_column, word_encoding, end_column], 1)
         # zero-pad right columns
-        word_encoding = F.pad(word_encoding, (0, max_word_len-word_encoding.size()[1]+2))
+        word_encoding = F.pad(word_encoding, (0, max_word_len-word_encoding.size()[1]+2)).data
         # create dimension
         word_encoding = word_encoding.unsqueeze(0)
 
