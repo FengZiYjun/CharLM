@@ -59,6 +59,7 @@ def char_embedding_lookup(word, char_embedding, char_table):
     encoded_word = char_embedding(Variable(torch.LongTensor(vec), requires_grad=False)).data
     return torch.transpose(encoded_word, 0, 1)
 
+
 def text2vec(words, char_dict, max_word_len):
     """ Return list of list of int """
     word_vec = []
@@ -68,6 +69,7 @@ def text2vec(words, char_dict, max_word_len):
             vec += [char_dict["PAD"] for _ in range(max_word_len - len(vec))]
         word_vec.append(vec)
     return word_vec
+
 
 def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
     """ convert the input strings into character embeddings """

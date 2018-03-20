@@ -10,13 +10,6 @@ from model import charLM
 from utilities import *
 from collections import namedtuple
 
-"""
-2. two layers of highways
-3. Use sequential to define combined layers
-4. add squeeze before view
-5. char embedding is learnable.
-7. flexible batch size and seq_len inside CharLM
-"""
 
 def preprocess(word_embed_dim):
     
@@ -31,16 +24,14 @@ def preprocess(word_embed_dim):
     reverse_word_dict = {value:key for key, value in word_dict.items()}
     max_word_len = max([len(word) for word in word_dict])
 
-    #word_embed_dim = 300
-    #char_embedding_dim = 15
-    word_embedding = nn.Embedding(vocab_size, word_embed_dim)
+    #word_embedding = nn.Embedding(vocab_size, word_embed_dim)
     #char_embedding = nn.Embedding(num_char, char_embedding_dim)
 
     # Note: detach embedding weights from the auto_grad graph.
     # PyTorch embedding weights are learnable variables by default.
     #char_embedding.weight.requires_grad = False
-    word_embedding.weight.requires_grad = False
-    word_emb_matrix = word_embedding.weight
+    #word_embedding.weight.requires_grad = False
+    #word_emb_matrix = word_embedding.weight
 
     objects = {
         "word_dict": word_dict,
@@ -69,13 +60,12 @@ def train(net, data, opt):
     valid_input = torch.from_numpy(data.valid_set)
     valid_label = torch.from_numpy(data.valid_label)
 
-    # [num_sample, 1, char_emb_dim, max_word_len+2]
-    train_input = torch.transpose(train_input.unsqueeze(0), 0, 1)
-    valid_input = torch.transpose(valid_input.unsqueeze(0), 0, 1)
-
+    # [num_seq, seq_len, max_word_len+2]
+    train_input = train_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
+    valid_input = valid_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
     num_epoch = opt.epochs
-    num_iter_per_epoch = train_input.size()[0] // opt.cnn_batch_size
+    num_iter_per_epoch = train_input.size()[0] // opt.lstm_batch_size
     
     leaning_rate = opt.init_lr
     old_PPL = 100000
@@ -88,11 +78,10 @@ def train(net, data, opt):
         ##############  Validation  ####################
         
         valid_output = net(to_var(valid_input))
-
-        valid_output = torch.transpose(valid_output, 0, 1)
+        length = valid_output.size()[0]
 
         # [num_sample-1, len(word_dict)] vs [num_sample-1]
-        valid_loss = criterion(valid_output, valid_label)
+        valid_loss = criterion(valid_output, valid_label[:length])
 
         PPL = torch.exp(valid_loss.data / opt.lstm_seq_len)
 
@@ -109,7 +98,8 @@ def train(net, data, opt):
                                lr = leaning_rate, 
                                momentum=0.85)
 
-        input_generator = batch_generator(train_input, opt.cnn_batch_size)
+        # split the first dim
+        input_generator = batch_generator(train_input, opt.lstm_batch_size)
 
         for t in range(num_iter_per_epoch):
             batch_input = input_generator.__next__()
@@ -119,11 +109,10 @@ def train(net, data, opt):
             
             output = net(to_var(batch_input))
             # [num_word, vocab_size]
-            output = torch.transpose(output, 0, 1)
             
             #distribution = get_distribution(output, word_emb_matrix)
             #loss = get_loss(output, train_words, word_dict, cnn_batch_size, t, lstm_seq_len)
-            loss = criterion(output, train_label)
+            loss = criterion(output, train_label[:output.size()[0]])
 
             net.zero_grad()
             loss.backward()
@@ -142,15 +131,17 @@ def train(net, data, opt):
 
 def test(net, data, opt):
     
-    test_input = torch.from_numpy(data.train_set)
-    test_label = torch.from_numpy(data.train_label)
-    # [num_sample, 1, char_emb_dim, max_word_len+2]
-    test_input = torch.transpose(test_input.unsqueeze(0), 0, 1)
+    test_input = torch.from_numpy(data.test_set)
+    test_label = torch.from_numpy(data.test_label)
+
+    # [num_seq, seq_len, max_word_len+2]
+    test_input = test_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
     criterion = nn.CrossEntropyLoss()
 
     test_output = net(test_input)
-    test_loss = criterion(test_output, test_label)
+
+    test_loss = criterion(test_output, test_label[:test_output.size()[0]])
     accuracy = torch.sum(test_label == test_output) / test_output.size()[0]
     PPL = torch.exp(test_loss / opt.lstm_seq_len)
 
@@ -237,11 +228,15 @@ for param in net.parameters():
     nn.init.uniform(param.data, -0.05, 0.05)
 
 
-Options = namedtuple("Options", "num_epoch cnn_batch_size init_lr lstm_seq_len")
+Options = namedtuple("Options", ["num_epoch", 
+        "cnn_batch_size", "init_lr", "lstm_seq_len",
+        "max_word_len", "lstm_batch_size"])
 opt = Options(num_epoch=25,
               cnn_batch_size=lstm_seq_len*lstm_batch_size,
               init_lr=1.0,
-              lstm_seq_len=lstm_seq_len)
+              lstm_seq_len=lstm_seq_len,
+              max_word_len=max_word_len,
+              lstm_batch_size=lstm_batch_size)
 
 
 print("Network built. Start training.")
@@ -260,7 +255,7 @@ torch.save(net.state_dict(), "cache/model.pt")
 print("Model saved.")
 
 #net.load_state_dict(torch.load("cache/model.pt"))
-test()
+test(net, data, opt)
 
 
 
