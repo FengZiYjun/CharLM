@@ -220,9 +220,9 @@ def test():
     tmp = predict_ix == truth_ix
     accuracy = float(torch.sum(tmp)) / float(length)
     
-    print("Final Loss={0:.4f}%".format(loss_test))
+    print("Final Loss={0:.4f}".format(float(loss_test.data)))
     print("Accuracy={0:.4f}%".format(100 * accuracy))
-    print("Final PPL={0:.4f}%".format(float(torch.mean(mean_PPL))))
+    print("Final PPL={0:.4f}".format(float(torch.mean(mean_PPL))))
 
 
 ################################################################
@@ -266,18 +266,19 @@ for param in net.parameters():
 
 print("Network built. Start making inputs.")
 
-
+"""
 try:
     train()
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
+"""
 
 
-torch.save(net.state_dict(), "cache/model.pt")
-print("Model saved.")
+#torch.save(net.state_dict(), "cache/model.pt")
+#print("Model saved.")
 
-
+net.load_state_dict(torch.load("cache/model.pt"))
 test()
 
 
