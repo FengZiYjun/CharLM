@@ -29,7 +29,7 @@ def get_distribution(output, word_emb_matrix):
     # (vocab_size, num_words)
     return torch.transpose(torch.cat(word_distributions, 0), 0, 1)
 
-
+ 
 
 def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no, lstm_seq_len):
     """ Sum up log prob for a sequence. And average all sequences. """
@@ -68,6 +68,7 @@ def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
     # char_table == list of unique chars
     # Returns: tensor of shape [len(input_words), char_embedding_dim, max_word_len+2]
     max_word_len = max([len(word) for word in input_words])
+    print("max_word_len={}".format(max_word_len))
     tensor_list = []
     
     #start_column = Variable(torch.ones(char_embedding_dim, 1))

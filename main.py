@@ -84,13 +84,13 @@ def train():
     num_epoch = 1  # 25 epochs in the paper
     num_iter_per_epoch = X.size()[0] // cnn_batch_size
     
-    print("Start training.")
-    
     valid_generator = batch_generator(valid_X, cnn_batch_size)
     leaning_rate = 0.001
 
     old_PPL = 0
+    
 
+    print("Start training.")
     for epoch in range(num_epoch):
     
         input_generator = batch_generator(X, cnn_batch_size)
@@ -145,7 +145,7 @@ def train():
 
                 print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data))
                 print("\tvalid loss={}".format(loss_valid.data))
-                print("\tPPL={}".format(PPL.data))
+                print("\tPPL={}".format(PPL))
 
 
 
@@ -193,30 +193,34 @@ def test():
         output = torch.transpose(output, 0, 1)
         # [vocab_size, num_words]
         
-        loss_valid = get_loss(output, text_words, vocabulary, cnn_batch_size, 0, lstm_seq_len)
-        PPL = torch.exp(loss_valid.data / lstm_seq_len)
+        loss_test = get_loss(output, text_words, vocabulary, cnn_batch_size, 0, lstm_seq_len)
+        PPL = torch.exp(loss_test.data / lstm_seq_len)
         mean_PPL.append(PPL)
 
         # LongTensor of [num_words]
-        _, targets = torch.max(output, 0).data
+        _, targets = torch.max(output.data, 0)
         
         predict_ix += list(targets)
 
     mean_PPL = torch.cat(mean_PPL, 0)
-    predict_ix = torch.cat(predict_ix, 0).data
+    predict_ix = torch.IntTensor(predict_ix)
+    #predict_ix = torch.cat(predict_ix, 0)
     length = int(predict_ix.size()[0])
     
     
     ix_list = [vocabulary[text_words[ix]] for ix in range(1, length+1)]
 
-    truth_ix = torch.LongTensor(ix_list)
+    truth_ix = torch.IntTensor(ix_list)
     #truth_ix = Variable(truth_ix, requires_grad=False)
+    
     if USE_GPU is True and torch.cuda.is_available():
         truth_ix = truth_ix.cuda()
+        predict_ix = predict_ix.cuda()
 
     tmp = predict_ix == truth_ix
-    accuracy = float(torch.sum(tmp.int())) / float(length)
+    accuracy = float(torch.sum(tmp)) / float(length)
     
+    print("Final Loss={0:.4f}%".format(loss_test))
     print("Accuracy={0:.4f}%".format(100 * accuracy))
     print("Final PPL={0:.4f}%".format(float(torch.mean(mean_PPL))))
 
@@ -268,8 +272,10 @@ try:
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
-    torch.save(net.state_dict(), "cache/model.pt")
-    print("Model saved.")
+
+
+torch.save(net.state_dict(), "cache/model.pt")
+print("Model saved.")
 
 
 test()
