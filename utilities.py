@@ -29,7 +29,7 @@ def get_distribution(output, word_emb_matrix):
     # (vocab_size, num_words)
     return torch.transpose(torch.cat(word_distributions, 0), 0, 1)
 
-
+ 
 
 def get_loss(output, input_words, vocabulary, cnn_batch_size, batch_no, lstm_seq_len):
     """ Sum up log prob for a sequence. And average all sequences. """
@@ -60,6 +60,18 @@ def char_embedding_lookup(word, char_embedding, char_table):
     return torch.transpose(encoded_word, 0, 1)
 
 
+def text2vec(words, char_dict, max_word_len):
+    """ Return list of list of int """
+    word_vec = []
+    for word in words:
+        vec = [char_dict[ch] for ch in word] 
+        if len(vec) < max_word_len:
+            vec += [char_dict["PAD"] for _ in range(max_word_len - len(vec))]
+        vec = [char_dict["BOW"]] + vec + [char_dict["EOW"]]
+        word_vec.append(vec)
+    return word_vec
+
+
 def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
     """ convert the input strings into character embeddings """
     # input_words == list of string
@@ -68,14 +80,12 @@ def seq2vec(input_words, char_embedding, char_embedding_dim, char_table):
     # char_table == list of unique chars
     # Returns: tensor of shape [len(input_words), char_embedding_dim, max_word_len+2]
     max_word_len = max([len(word) for word in input_words])
+    print("max_word_len={}".format(max_word_len))
     tensor_list = []
     
-    #start_column = Variable(torch.ones(char_embedding_dim, 1))
-    #end_column = Variable(torch.ones(char_embedding_dim, 1))
     start_column = torch.ones(char_embedding_dim, 1)
     end_column = torch.ones(char_embedding_dim, 1)
 
-    
     for word in input_words:
         # convert string to word embedding
         word_encoding = char_embedding_lookup(word, char_embedding, char_table)
@@ -100,17 +110,23 @@ def read_data(file_name):
     return corpus.split()
 
 
-def create_char_table(vocabulary):
-    # vocabulary == list of strings, all unique words
-    # Return: list of unique chars
-    return list(set([char for word in vocabulary for char in word]))
+def get_char_dict(vocabulary):
+    # vocabulary == dict of (word, int)
+    # Return: dict of (char, int), starting from 1
+    char_dict = dict()
+    count = 1
+    for word in vocabulary:
+        for ch in word:
+            if ch not in char_dict:
+                char_dict[ch] = count
+                count += 1
+    return char_dict
 
-
-def get_vocab_and_char_table(*file_name):
+def create_word_char_dict(*file_name):
     text = []
     for file in file_name:
         text += read_data(file)
-    vocabulary = {word:ix for ix, word in enumerate(set(text))}
-    char_table = create_char_table(vocabulary)
-    return vocabulary, char_table
+    word_dict = {word:ix for ix, word in enumerate(set(text))}
+    char_dict = get_char_dict(word_dict)
+    return word_dict, char_dict
 

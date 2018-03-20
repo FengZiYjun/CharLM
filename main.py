@@ -8,127 +8,133 @@ import numpy as np
 import os
 from model import charLM
 from utilities import *
+from collections import namedtuple
 
-"""
-Issues: 
 
-"""
+def preprocess(word_embed_dim):
+    
+    word_dict, char_dict = create_word_char_dict("valid.txt", "train.txt", "test.txt")
+    num_words = len(word_dict)
+    num_char  = len(char_dict)
+    char_dict["BOW"] = num_char+1
+    char_dict["EOW"] = num_char+2
+    char_dict["PAD"] = 0
+    
+    #  dict of (int, string)
+    reverse_word_dict = {value:key for key, value in word_dict.items()}
+    max_word_len = max([len(word) for word in word_dict])
 
-def preprocess():
-    # vocabulary == dict of (string, int)
-    vocabulary, char_table = get_vocab_and_char_table("valid.txt", "train.txt")
-
-    # reverse_vocab == dict of (int, string)
-    reverse_vocab = {value:key for key, value in vocabulary.items()}
-
-    vocab_size = len(vocabulary)
-    num_char = len(char_table)
-    word_embedding_dim = 300
-    char_embedding_dim = 15
-    word_embedding = nn.Embedding(vocab_size, word_embedding_dim)
-    char_embedding = nn.Embedding(num_char, char_embedding_dim)
+    #word_embedding = nn.Embedding(vocab_size, word_embed_dim)
+    #char_embedding = nn.Embedding(num_char, char_embedding_dim)
 
     # Note: detach embedding weights from the auto_grad graph.
     # PyTorch embedding weights are learnable variables by default.
-    char_embedding.weight.requires_grad = False
-    word_embedding.weight.requires_grad = False
-    word_emb_matrix = word_embedding.weight
+    #char_embedding.weight.requires_grad = False
+    #word_embedding.weight.requires_grad = False
+    #word_emb_matrix = word_embedding.weight
 
-    torch.save(word_emb_matrix, "cache/word_emb_matrix.pt") 
-    torch.save(char_embedding, "cache/char_embedding.pt")
-    torch.save(char_table, "cache/char_table.pt")
-    torch.save(vocabulary, "cache/vocabulary.pt")
-    torch.save(reverse_vocab, "cache/reverse_vocab.pt")
-    print("Embeddings saved.")
+    objects = {
+        "word_dict": word_dict,
+        "char_dict": char_dict,
+        "reverse_word_dict": reverse_word_dict,
+        #"word_embed_matrix": word_embed_matrix,
+        "max_word_len": max_word_len
+    }
+    
+    torch.save(objects, "cache/prep.pt")
+    print("Preprocess done.")
 
 
+def to_var(x):
+    if torch.cuda.is_available():
+        x = x.cuda()
+    return Variable(x)
 
-def train():
+
+def train(net, data, opt):
     
     torch.manual_seed(1024)
 
-    # list of strings
-    input_words = read_data("./train.txt")
-    valid_set = read_data("./valid.txt")
+    train_input = torch.from_numpy(data.train_input)
+    train_label = torch.from_numpy(data.train_label)
+    valid_input = torch.from_numpy(data.valid_input)
+    valid_label = torch.from_numpy(data.valid_label)
 
-    global word_emb_matrix
-    global net
+    # [num_seq, seq_len, max_word_len+2]
+    num_seq = train_input.size()[0] // opt.lstm_seq_len
+    train_input = train_input[:num_seq*opt.lstm_seq_len, :]
+    train_input = train_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
-    if os.path.exists("cache/train_X.pt"):
-        X = torch.load("cache/train_X.pt")
-        valid_X = torch.load("cache/valid_X.pt")
-        print("loaded train/valid inputs.")
-    else:
-        X = seq2vec(input_words, char_embedding, char_embedding_dim, char_table)
-        X = X.unsqueeze(0)
-        X = torch.transpose(X, 0, 1)
+    num_seq = valid_input.size()[0] // opt.lstm_seq_len
+    valid_input = valid_input[:num_seq*opt.lstm_seq_len, :]
+    valid_input = valid_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
-        valid_X = seq2vec(valid_set, char_embedding, char_embedding_dim, char_table).unsqueeze(0)
-        valid_X = torch.transpose(valid_X, 0, 1)
-        
-        torch.save(X, "cache/train_X.pt")
-        torch.save(valid_X, "cache/valid_X.pt")
-        print("train/valid inputs saved.")
+    num_epoch = opt.epochs
+    num_iter_per_epoch = train_input.size()[0] // opt.lstm_batch_size
     
+    leaning_rate = opt.init_lr
+    old_PPL = 100000
 
-
-
-    if USE_GPU is True and torch.cuda.is_available():
-        X = X.cuda()
-        valid_X = valid_X.cuda()
-        net = net.cuda()
-        word_emb_matrix = word_emb_matrix.cuda()
-        torch.cuda.manual_seed(1024)
-
-
-    num_epoch = 1  # 25 epochs in the paper
-    num_iter_per_epoch = X.size()[0] // cnn_batch_size
-    
-    print("Start training.")
-    
-    valid_generator = batch_generator(valid_X, cnn_batch_size)
-    leaning_rate = 0.001
-
-    old_PPL = 0
+    # Log-SoftMax
+    criterion = nn.CrossEntropyLoss()
 
     for epoch in range(num_epoch):
-    
-        input_generator = batch_generator(X, cnn_batch_size)
 
-        batch_valid = valid_generator.__next__()
-        output_valid = net(Variable(batch_valid), word_emb_matrix)
-        output_valid = torch.transpose(output_valid, 0, 1)
+        ##############  Validation  ####################
+        loss_batch = []
+        PPL_batch = []
+        iterations = valid_input.size()[0] // opt.lstm_batch_size
+        
+        valid_generator = batch_generator(valid_input, opt.lstm_batch_size)
+        label_generator = batch_generator(valid_label, opt.lstm_batch_size*opt.lstm_seq_len)
 
-        loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch, lstm_seq_len)
-        PPL = torch.exp(loss_valid.data / lstm_seq_len)
-        print("[epoch {}] PPL={}".format(epoch, PPL))
+        for t in range(iterations):
+            batch_input = valid_generator.__next__()
+            batch_label = label_generator.__next__()
 
-        if old_PPL == 0:
-            old_PPL = PPL
-        else:
-            print("PPL decrease={}".format(old_PPL - PPL))
-            if old_PPL - PPL <= 1.0:
-                leaning_rate /= 2
-                print("halved learning rate")
+            valid_output = net(to_var(batch_input))
+            length = valid_output.size()[0]
 
+            # [num_sample-1, len(word_dict)] vs [num_sample-1]
+            valid_loss = criterion(valid_output, to_var(batch_label))
+
+            PPL = torch.exp(valid_loss.data / opt.lstm_seq_len)
+
+            loss_batch.append(float(valid_loss))
+            PPL_batch.append(float(PPL))
+
+        PPL = np.mean(PPL_batch)
+        print("[epoch {}] valid PPL={}".format(epoch, PPL))
+        print("valid loss={}".format(np.mean(loss_batch)))
+        print("PPL decrease={}".format(float(old_PPL - PPL)))
+
+        if float(old_PPL - PPL) <= 1.0:
+            leaning_rate /= 2
+            print("halved lr:{}".format(leaning_rate))
+
+        old_PPL = PPL
+
+        ##################################################
 
         optimizer  = optim.SGD(net.parameters(), 
                                lr = leaning_rate, 
                                momentum=0.85)
 
-        
+        # split the first dim
+        input_generator = batch_generator(train_input, opt.lstm_batch_size)
+        label_generator = batch_generator(train_label, opt.lstm_batch_size*opt.lstm_seq_len)
+
         for t in range(num_iter_per_epoch):
             batch_input = input_generator.__next__()
-            
+            batch_label = label_generator.__next__()
+
             # detach hidden state of LSTM from last batch
             net.repackage_hidden()
             
-            output = net(Variable(batch_input), word_emb_matrix)
+            output = net(to_var(batch_input))
             # [num_word, vocab_size]
-            output = torch.transpose(output, 0, 1)
             
-            #distribution = get_distribution(output, word_emb_matrix)
-            loss = get_loss(output, input_words, vocabulary, cnn_batch_size, t, lstm_seq_len)
+            loss = criterion(output, to_var(batch_label))
 
             net.zero_grad()
             loss.backward()
@@ -137,15 +143,7 @@ def train():
             
             
             if t % 300 == 0:
-                
-                output_valid = net(Variable(batch_valid), word_emb_matrix)             
-                output_valid = torch.transpose(output_valid, 0, 1)
-                loss_valid = get_loss(output_valid, valid_set, vocabulary, cnn_batch_size, epoch, lstm_seq_len)
-                PPL = torch.exp(loss_valid.data / lstm_seq_len)
-
-                print("[epoch {} step {}] \n\ttrain loss={}".format(epoch+1, t+1, loss.data))
-                print("\tvalid loss={}".format(loss_valid.data))
-                print("\tPPL={}".format(PPL.data))
+                print("[epoch {} step {}] train loss={0:.4f}".format(epoch+1, t+1, float(loss.data)))
 
 
 
@@ -153,93 +151,102 @@ def train():
 
 
 
-def test():
-    print("Start testing.")
-    text_words = read_data("./test.txt")
+def test(net, data, opt):
     
-    if os.path.exists("cache/test_X.pt"):
-        X = torch.load("cache/test_X.pt")
-        print("load test inputs.")
-    else:
-        X = seq2vec(text_words, char_embedding, char_embedding_dim, char_table)
-        X = X.unsqueeze(0)
-        X = torch.transpose(X, 0, 1)    
-        torch.save(X, "cache/test_X.pt")
-        print("test inputs saved.")
-    
+    test_input = torch.from_numpy(data.test_input)
+    test_label = torch.from_numpy(data.test_label)
 
-    global net
-    global word_emb_matrix
+    num_seq = test_input.size()[0] // opt.lstm_seq_len
+    test_input = test_input[:num_seq*opt.lstm_seq_len, :]
+    # [num_seq, seq_len, max_word_len+2]
+    test_input = test_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
-    if USE_GPU is True and torch.cuda.is_available():
-        X = X.cuda()
-        net = net.cuda()
-        word_emb_matrix = word_emb_matrix.cuda()
-        torch.cuda.manual_seed(1024)
+    criterion = nn.CrossEntropyLoss()
 
-
-    num_iter = X.size()[0] // cnn_batch_size
-    generator = batch_generator(X, cnn_batch_size)
-
-    predict_words = []
-    predict_ix = []
-
-    mean_PPL = []
-
-    for t in range(num_iter):
-        batch_input = generator.__next__()
-
-        output = net(Variable(batch_input), word_emb_matrix)
-        output = torch.transpose(output, 0, 1)
-        # [vocab_size, num_words]
+    #output_list = []
+    loss_list = []
+    num_hits = 0
+    total = 0
+    iterations = test_input.size()[0] // opt.lstm_batch_size
+    for t in range(iterations):
+        test_output = net(to_var(test_input[t*opt.lstm_batch_size:(t+1)*opt.lstm_batch_size]))
         
-        loss_valid = get_loss(output, text_words, vocabulary, cnn_batch_size, 0, lstm_seq_len)
-        PPL = torch.exp(loss_valid.data / lstm_seq_len)
-        mean_PPL.append(PPL)
+        total += test_output.size()[0]
+        batch_label = test_label[t*opt.lstm_batch_size*opt.lstm_seq_len+1:(t+1)*opt.lstm_batch_size*opt.lstm_seq_len+1]
 
-        # LongTensor of [num_words]
-        _, targets = torch.max(output, 0).data
-        
-        predict_ix += list(targets)
+        test_loss = criterion(test_output, to_var(batch_label))
+        loss_list.append(test_loss)
+        test_predict = torch.max(test_output, dim=1)[1]
+        num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
 
-    mean_PPL = torch.cat(mean_PPL, 0)
-    predict_ix = torch.cat(predict_ix, 0).data
-    length = int(predict_ix.size()[0])
+    test_loss = torch.mean(loss_list)
+    accuracy =  num_hits / total
+    PPL = torch.exp(test_loss / opt.lstm_seq_len)
+
     
-    
-    ix_list = [vocabulary[text_words[ix]] for ix in range(1, length+1)]
-
-    truth_ix = torch.LongTensor(ix_list)
-    #truth_ix = Variable(truth_ix, requires_grad=False)
-    if USE_GPU is True and torch.cuda.is_available():
-        truth_ix = truth_ix.cuda()
-
-    tmp = predict_ix == truth_ix
-    accuracy = float(torch.sum(tmp.int())) / float(length)
-    
-    print("Accuracy={0:.4f}%".format(100 * accuracy))
-    print("Final PPL={0:.4f}%".format(float(torch.mean(mean_PPL))))
+    print("Final Loss={0:.4f}".format(float(test_loss.data)))
+    print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
+    print("Final PPL={0:.4f}".format(float(PPL.data)))
 
 
 ################################################################
 
-word_embedding_dim = 300
+word_embed_dim = 300
 char_embedding_dim = 15
 
-if os.path.exists("cache/word_emb_matrix.pt") is False:
-    preprocess()
+if os.path.exists("cache/prep.pt") is False:
+    preprocess(word_embed_dim)
 
-word_emb_matrix = torch.load("cache/word_emb_matrix.pt")
-char_embedding = torch.load("cache/char_embedding.pt")
-char_table = torch.load("cache/char_table.pt")
-vocabulary = torch.load("cache/vocabulary.pt")
-reverse_vocab =torch.load("cache/reverse_vocab.pt")
-print("loaded embeddings.")
-vocab_size = len(vocabulary)
-num_char = len(char_table)
+objetcs = torch.load("cache/prep.pt")
+
+word_dict = objetcs["word_dict"]
+char_dict = objetcs["char_dict"]
+reverse_word_dict = objetcs["reverse_word_dict"]
+#word_embed_matrix = objetcs["word_embed_matrix"]
+max_word_len = objetcs["max_word_len"]
+num_words = len(word_dict)
+
+print("word/char dictionary built. Start making inputs.")
 
 
-print("Embedding built. Start building network.")
+if os.path.exists("cache/data_sets.pt") is False:
+    train_text = read_data("./train.txt")
+    valid_text = read_data("./valid.txt")
+    test_text  = read_data("./test.txt")
+
+    train_set = np.array(text2vec(train_text, char_dict, max_word_len))
+    valid_set = np.array(text2vec(valid_text, char_dict, max_word_len))
+    test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
+
+    # Labels are next-word index in word_dict with the same length as inputs
+    train_label = np.array([word_dict[w] for w in train_text[1:]] + [word_dict[train_text[-1]]])
+    valid_label = np.array([word_dict[w] for w in valid_text[1:]] + [word_dict[valid_text[-1]]])
+    test_label  = np.array([word_dict[w] for w in test_text[1:]] + [word_dict[test_text[-1]]])
+
+    category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
+                "tlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
+    torch.save(category, "cache/data_sets.pt") 
+else:
+    data_sets = torch.load("cache/data_sets.pt")
+    train_set = data_sets["tdata"]
+    valid_set = data_sets["vdata"]
+    test_set  = data_sets["test"]
+    train_label = data_sets["tlabel"]
+    valid_label = data_sets["vlabel"]
+    test_label = data_sets["tlabel"]
+
+
+DataTuple = namedtuple("DataTuple", 
+            "train_input train_label valid_input valid_label test_input test_label")
+data = DataTuple(train_input=train_set,
+                 train_label=train_label,
+                 valid_input=valid_set,
+                 valid_label=valid_label,
+                 test_input=test_set,
+                 test_label=test_label)
+
+print("Loaded data sets. Start building network.")
+
 
 
 USE_GPU = True
@@ -250,29 +257,47 @@ lstm_batch_size = 20
 # cnn_batch_size == lstm_seq_len * lstm_batch_size
 
 net = charLM(char_embedding_dim, 
-            word_embedding_dim, 
+            word_embed_dim, 
             lstm_seq_len,
             lstm_batch_size,
-            vocab_size,
+            num_words,
+            len(char_dict),
+            max_word_len,
             use_gpu=USE_GPU)
 
 for param in net.parameters():
     nn.init.uniform(param.data, -0.05, 0.05)
 
 
-print("Network built. Start making inputs.")
+Options = namedtuple("Options", ["num_epoch", 
+        "cnn_batch_size", "init_lr", "lstm_seq_len",
+        "max_word_len", "lstm_batch_size", "epochs"])
+opt = Options(num_epoch=25,
+              cnn_batch_size=lstm_seq_len*lstm_batch_size,
+              init_lr=1.0,
+              lstm_seq_len=lstm_seq_len,
+              max_word_len=max_word_len,
+              lstm_batch_size=lstm_batch_size,
+              epochs=2)
+
+
+print("Network built. Start training.")
+
+
 
 
 try:
-    train()
+    train(net, data, opt)
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
-    torch.save(net.state_dict(), "cache/model.pt")
-    print("Model saved.")
 
 
-test()
+torch.save(net.state_dict(), "cache/model.pt")
+print("Model saved.")
+
+#net.load_state_dict(torch.load("cache/model.pt"))
+test(net, data, opt)
 
 
 
