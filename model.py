@@ -22,6 +22,7 @@ class charLM(nn.Module):
         lstm_seq_len: num of words in a LSTM sequence / num of time steps that LSTM goes through
         lstm_batch_size: num of sequences in a "LSTM" batch
         vocab_size: num of unique words
+        num_char: total number of characters in all data sets
         use_gpu: True or False
     """
     def __init__(self, char_emb_dim, word_emb_dim, 
@@ -86,7 +87,7 @@ class charLM(nn.Module):
         self.dropout = nn.Dropout(p=0.5)
         self.linear = nn.Linear(self.word_emb_dim, self.vocab_size)
 
-        """
+        
         if self.use_gpu is True:
             for x in range(len(self.convolutions)):
                 self.convolutions[x] = self.convolutions[x].cuda()
@@ -94,11 +95,13 @@ class charLM(nn.Module):
             self.fc2 = self.fc2.cuda()
             self.hidden = (self.hidden[0].cuda(), self.hidden[1].cuda())
             self.lstm = self.lstm.cuda()
-            self.emb_bias = self.emb_bias.cuda()
             self.dropout = self.dropout.cuda()
-        """
+            self.char_embed = self.char_embed.cuda()
+            self.linear = self.linear.cuda()
+            self.batch_norm = self.batch_norm.cuda()
+        
 
-    def forward(self, x, word_emb):
+    def forward(self, x):
         # Input: Variable of Tensor with shape [num_seq, seq_len, max_word_len+2]
         # Return: Variable of Tensor with shape [num_words, len(word_dict)]
         lstm_batch_size = x.size()[0]

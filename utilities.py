@@ -64,9 +64,10 @@ def text2vec(words, char_dict, max_word_len):
     """ Return list of list of int """
     word_vec = []
     for word in words:
-        vec = char_dict["BOW"] + [char_dict[ch] for ch in word] + char_dict["EOW"]
+        vec = [char_dict[ch] for ch in word] 
         if len(vec) < max_word_len:
             vec += [char_dict["PAD"] for _ in range(max_word_len - len(vec))]
+        vec = [char_dict["BOW"]] + vec + [char_dict["EOW"]]
         word_vec.append(vec)
     return word_vec
 

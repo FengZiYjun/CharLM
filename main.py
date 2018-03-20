@@ -15,7 +15,7 @@ def preprocess(word_embed_dim):
     
     word_dict, char_dict = create_word_char_dict("valid.txt", "train.txt", "test.txt")
     num_words = len(word_dict)
-    num_chars = len(char_dict)
+    num_char  = len(char_dict)
     char_dict["BOW"] = num_char+1
     char_dict["EOW"] = num_char+2
     char_dict["PAD"] = 0
@@ -37,7 +37,7 @@ def preprocess(word_embed_dim):
         "word_dict": word_dict,
         "char_dict": char_dict,
         "reverse_word_dict": reverse_word_dict,
-        "word_embed_matrix": word_embed_matrix,
+        #"word_embed_matrix": word_embed_matrix,
         "max_word_len": max_word_len
     }
     
@@ -55,13 +55,18 @@ def train(net, data, opt):
     
     torch.manual_seed(1024)
 
-    train_input = torch.from_numpy(data.train_set)
+    train_input = torch.from_numpy(data.train_input)
     train_label = torch.from_numpy(data.train_label)
-    valid_input = torch.from_numpy(data.valid_set)
+    valid_input = torch.from_numpy(data.valid_input)
     valid_label = torch.from_numpy(data.valid_label)
 
     # [num_seq, seq_len, max_word_len+2]
+    num_seq = train_input.size()[0] // opt.lstm_seq_len
+    train_input = train_input[:num_seq*opt.lstm_seq_len, :]
     train_input = train_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
+
+    num_seq = valid_input.size()[0] // opt.lstm_seq_len
+    valid_input = valid_input[:num_seq*opt.lstm_seq_len, :]
     valid_input = valid_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
     num_epoch = opt.epochs
@@ -131,7 +136,7 @@ def train(net, data, opt):
 
 def test(net, data, opt):
     
-    test_input = torch.from_numpy(data.test_set)
+    test_input = torch.from_numpy(data.test_input)
     test_label = torch.from_numpy(data.test_label)
 
     # [num_seq, seq_len, max_word_len+2]
@@ -163,7 +168,7 @@ objetcs = torch.load("cache/prep.pt")
 word_dict = objetcs["word_dict"]
 char_dict = objetcs["char_dict"]
 reverse_word_dict = objetcs["reverse_word_dict"]
-word_embed_matrix = objetcs["word_embed_matrix"]
+#word_embed_matrix = objetcs["word_embed_matrix"]
 max_word_len = objetcs["max_word_len"]
 num_words = len(word_dict)
 
@@ -186,7 +191,7 @@ if os.path.exists("cache/data_sets.pt") is False:
 
     category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
                 "tlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
-    torch.save(, "cache/data_sets.pt") 
+    torch.save(category, "cache/data_sets.pt") 
 else:
     data_sets = torch.load("cache/data_sets.pt")
     train_set = data_sets["tdata"]
@@ -222,6 +227,7 @@ net = charLM(char_embedding_dim,
             lstm_seq_len,
             lstm_batch_size,
             num_words,
+            len(char_dict),
             use_gpu=USE_GPU)
 
 for param in net.parameters():
@@ -230,13 +236,14 @@ for param in net.parameters():
 
 Options = namedtuple("Options", ["num_epoch", 
         "cnn_batch_size", "init_lr", "lstm_seq_len",
-        "max_word_len", "lstm_batch_size"])
+        "max_word_len", "lstm_batch_size", "epochs"])
 opt = Options(num_epoch=25,
               cnn_batch_size=lstm_seq_len*lstm_batch_size,
               init_lr=1.0,
               lstm_seq_len=lstm_seq_len,
               max_word_len=max_word_len,
-              lstm_batch_size=lstm_batch_size)
+              lstm_batch_size=lstm_batch_size,
+              epochs=2)
 
 
 print("Network built. Start training.")
