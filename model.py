@@ -27,7 +27,7 @@ class charLM(nn.Module):
     """
     def __init__(self, char_emb_dim, word_emb_dim, 
                 lstm_seq_len, lstm_batch_size, 
-                vocab_size, num_char,
+                vocab_size, num_char, max_word_len
                 use_gpu):
         super(charLM, self).__init__()
         self.char_emb_dim = char_emb_dim
@@ -36,6 +36,7 @@ class charLM(nn.Module):
         self.lstm_batch_size = lstm_batch_size
         self.vocab_size = vocab_size
         self.use_gpu = use_gpu
+        self.max_word_len = max_word_len
 
         # char embedding layer
         self.char_embed = nn.Embedding(num_char, char_emb_dim)
@@ -51,7 +52,7 @@ class charLM(nn.Module):
                 nn.Conv2d(
                     1,           # in_channel
                     out_channel, # out_channel
-                    kernel_size=(self.char_emb_dim, filter_width), # (height, width)
+                    kernel_size=(self.max_word_len, filter_width), # (height, width)
                     bias=True
                     )
             )
@@ -68,10 +69,10 @@ class charLM(nn.Module):
         self.lstm_num_layers = 2
         # num of hidden units == word_embedding_dim
         self.hidden = (Variable(torch.zeros(self.lstm_num_layers, 
-                                            self.lstm_batch_size, 
+                                            self.lstm_seq_len, 
                                             self.word_emb_dim)),
                        Variable(torch.zeros(self.lstm_num_layers, 
-                                            self.lstm_batch_size, 
+                                            self.lstm_seq_len, 
                                             self.word_emb_dim))
                        )
 
@@ -125,16 +126,16 @@ class charLM(nn.Module):
         x = self.highway_layer(x)
         # [num_seq*seq_len, total_num_filters]
 
-        x = x.contiguous().view(self.lstm_seq_len, lstm_batch_size, -1)
+        x = x.contiguous().view(lstm_seq_len, lstm_batch_size, -1)
         # [num_seq, seq_len, total_num_filters]
         
         x, self.hidden = self.lstm(x, self.hidden)
-        # [num_seq, seq_len, hidden_size]
+        # [seq_len, num_seq, hidden_size]
         
         x = self.dropout(x)
-        # [num_seq, seq_len, hidden_size]
+        # [seq_len, num_seq, hidden_size]
         
-        x = x.contiguous().view(lstm_batch_size*lstm_seq_len -1)
+        x = x.contiguous().view(lstm_batch_size*lstm_seq_len, -1)
         # [num_seq*seq_len, hidden_size]
 
         x = self.linear(x)

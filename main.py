@@ -81,21 +81,38 @@ def train(net, data, opt):
     for epoch in range(num_epoch):
 
         ##############  Validation  ####################
+        loss_batch = []
+        PPL_batch = []
+        iterations = valid_input.size()[0] // opt.lstm_batch_size
         
-        valid_output = net(to_var(valid_input))
-        length = valid_output.size()[0]
+        valid_generator = batch_generator(valid_input, opt.lstm_batch_size)
+        label_generator = batch_generator(valid_label, opt.lstm_batch_size*opt.lstm_seq_len)
 
-        # [num_sample-1, len(word_dict)] vs [num_sample-1]
-        valid_loss = criterion(valid_output, valid_label[:length])
+        for t in range(iterations):
+            batch_input = valid_generator.__next__()
+            batch_label = label_generator.__next__()
 
-        PPL = torch.exp(valid_loss.data / opt.lstm_seq_len)
+            valid_output = net(to_var(batch_input))
+            length = valid_output.size()[0]
 
-        print("[epoch {}] valid PPL={}".format(epoch, float(PPL)))
+            # [num_sample-1, len(word_dict)] vs [num_sample-1]
+            valid_loss = criterion(valid_output, to_var(batch_label))
+
+            PPL = torch.exp(valid_loss.data / opt.lstm_seq_len)
+
+            loss_batch.append(float(valid_loss))
+            PPL_batch.append(float(PPL))
+
+        PPL = np.mean(PPL_batch)
+        print("[epoch {}] valid PPL={}".format(epoch, PPL))
+        print("valid loss={}".format(np.mean(loss_batch)))
         print("PPL decrease={}".format(float(old_PPL - PPL)))
 
-        if old_PPL - PPL <= 1.0:
+        if float(old_PPL - PPL) <= 1.0:
             leaning_rate /= 2
             print("halved lr:{}".format(leaning_rate))
+
+        old_PPL = PPL
 
         ##################################################
 
@@ -105,19 +122,19 @@ def train(net, data, opt):
 
         # split the first dim
         input_generator = batch_generator(train_input, opt.lstm_batch_size)
+        label_generator = batch_generator(train_label, opt.lstm_batch_size*opt.lstm_seq_len)
 
         for t in range(num_iter_per_epoch):
             batch_input = input_generator.__next__()
-            
+            batch_label = label_generator.__next__()
+
             # detach hidden state of LSTM from last batch
             net.repackage_hidden()
             
             output = net(to_var(batch_input))
             # [num_word, vocab_size]
             
-            #distribution = get_distribution(output, word_emb_matrix)
-            #loss = get_loss(output, train_words, word_dict, cnn_batch_size, t, lstm_seq_len)
-            loss = criterion(output, train_label[:output.size()[0]])
+            loss = criterion(output, to_var(batch_label))
 
             net.zero_grad()
             loss.backward()
@@ -126,7 +143,7 @@ def train(net, data, opt):
             
             
             if t % 300 == 0:
-                print("[epoch {} step {}] train loss={}".format(epoch+1, t+1, float(loss.data)))
+                print("[epoch {} step {}] train loss={0:.4f}".format(epoch+1, t+1, float(loss.data)))
 
 
 
@@ -139,20 +156,37 @@ def test(net, data, opt):
     test_input = torch.from_numpy(data.test_input)
     test_label = torch.from_numpy(data.test_label)
 
+    num_seq = test_input.size()[0] // opt.lstm_seq_len
+    test_input = test_input[:num_seq*opt.lstm_seq_len, :]
     # [num_seq, seq_len, max_word_len+2]
     test_input = test_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
 
     criterion = nn.CrossEntropyLoss()
 
-    test_output = net(test_input)
+    #output_list = []
+    loss_list = []
+    num_hits = 0
+    total = 0
+    iterations = test_input.size()[0] // opt.lstm_batch_size
+    for t in range(iterations):
+        test_output = net(to_var(test_input[t*opt.lstm_batch_size:(t+1)*opt.lstm_batch_size]))
+        
+        total += test_output.size()[0]
+        batch_label = test_label[t*opt.lstm_batch_size*opt.lstm_seq_len+1:(t+1)*opt.lstm_batch_size*opt.lstm_seq_len+1]
 
-    test_loss = criterion(test_output, test_label[:test_output.size()[0]])
-    accuracy = torch.sum(test_label == test_output) / test_output.size()[0]
+        test_loss = criterion(test_output, to_var(batch_label))
+        loss_list.append(test_loss)
+        test_predict = torch.max(test_output, dim=1)[1]
+        num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
+
+    test_loss = torch.mean(loss_list)
+    accuracy =  num_hits / total
     PPL = torch.exp(test_loss / opt.lstm_seq_len)
 
+    
     print("Final Loss={0:.4f}".format(float(test_loss.data)))
-    print("Accuracy={0:.4f}%".format(100 * accuracy))
-    print("Final PPL={0:.4f}".format(float(torch.mean(PPL))))
+    print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
+    print("Final PPL={0:.4f}".format(float(PPL.data)))
 
 
 ################################################################
@@ -184,10 +218,10 @@ if os.path.exists("cache/data_sets.pt") is False:
     valid_set = np.array(text2vec(valid_text, char_dict, max_word_len))
     test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
 
-    # Labels are next-word index in word_dict
-    train_label = np.array([word_dict[w] for w in train_text[1:]])
-    valid_label = np.array([word_dict[w] for w in valid_text[1:]])
-    test_label  = np.array([word_dict[w] for w in test_text[1:]])
+    # Labels are next-word index in word_dict with the same length as inputs
+    train_label = np.array([word_dict[w] for w in train_text[1:]] + [word_dict[train_text[-1]]])
+    valid_label = np.array([word_dict[w] for w in valid_text[1:]] + [word_dict[valid_text[-1]]])
+    test_label  = np.array([word_dict[w] for w in test_text[1:]] + [word_dict[test_text[-1]]])
 
     category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
                 "tlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
@@ -228,6 +262,7 @@ net = charLM(char_embedding_dim,
             lstm_batch_size,
             num_words,
             len(char_dict),
+            max_word_len,
             use_gpu=USE_GPU)
 
 for param in net.parameters():
