@@ -1,4 +1,12 @@
-
+import os
+import torch
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+from model import charLM
+from utilities import *
+from collections import namedtuple
 
 def to_var(x):
     if torch.cuda.is_available():
@@ -30,10 +38,10 @@ def test(net, data, opt):
               to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)))
     
     for t in range(iterations):
-    	batch_input = test_generator.__next__ ()
-    	batch_label = label_generator.__next__()
+        batch_input = test_generator.__next__ ()
+        batch_label = label_generator.__next__()
 
-    	hidden = [state.detach() for state in hidden]
+        hidden = [state.detach() for state in hidden]
         test_output, hidden = net(to_var(batch_input), hidden)
         
         total += test_output.size()[0]
@@ -46,7 +54,7 @@ def test(net, data, opt):
 
     test_loss = torch.mean(torch.cat(loss_list), 0)
     accuracy =  float(num_hits) / total
-    PPL = torch.exp(test_loss / opt.lstm_seq_len)
+    PPL = torch.exp(test_loss)
 
     
     print("Final Loss={0:.4f}".format(float(test_loss)))
@@ -66,7 +74,7 @@ if os.path.exists("cache/prep.pt") is False:
 objetcs = torch.load("cache/prep.pt")
 
 word_dict = objetcs["word_dict"]
-#char_dict = objetcs["char_dict"]
+char_dict = objetcs["char_dict"]
 #reverse_word_dict = objetcs["reverse_word_dict"]
 #word_embed_matrix = objetcs["word_embed_matrix"]
 max_word_len = objetcs["max_word_len"]

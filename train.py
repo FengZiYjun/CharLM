@@ -158,8 +158,8 @@ def train(net, data, opt):
             
             
             if (t+1) % 100 == 0:
-                print("[epoch {} step {}] train loss={0:.4f}, Perplexity={0:.4f}".format(epoch+1, 
-                    t+1, float(loss.data), np.exp(float(loss.data))))
+                print("[epoch {} step {}] train loss={}, Perplexity={}".format(epoch+1, 
+                    t+1, float(loss.data), float(np.exp(loss.data))))
 
 
 
@@ -256,7 +256,7 @@ opt = Options(num_epoch=25,
               lstm_seq_len=lstm_seq_len,
               max_word_len=max_word_len,
               lstm_batch_size=lstm_batch_size,
-              epochs=2,
+              epochs=25,
               word_embed_dim=word_embed_dim)
 
 
