@@ -23,14 +23,24 @@ def test(net, data, opt):
     num_hits = 0
     total = 0
     iterations = test_input.size()[0] // opt.lstm_batch_size
+    test_generator = batch_generator(test_input, opt.lstm_batch_size)
+    label_generator = batch_generator(test_label, opt.lstm_batch_size*opt.lstm_seq_len)
+
+    hidden = (to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)), 
+              to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)))
+    
     for t in range(iterations):
-        test_output = net(to_var(test_input[t*opt.lstm_batch_size:(t+1)*opt.lstm_batch_size]))
+    	batch_input = test_generator.__next__ ()
+    	batch_label = label_generator.__next__()
+
+    	hidden = [state.detach() for state in hidden]
+        test_output, hidden = net(to_var(batch_input), hidden)
         
         total += test_output.size()[0]
-        batch_label = test_label[t*opt.lstm_batch_size*opt.lstm_seq_len+1:(t+1)*opt.lstm_batch_size*opt.lstm_seq_len+1]
 
         test_loss = criterion(test_output, to_var(batch_label)).data
         loss_list.append(test_loss)
+
         test_predict = torch.max(test_output, dim=1)[1]
         num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
 
@@ -114,14 +124,16 @@ net.load_state_dict(torch.load("cache/model.pt"))
 
 Options = namedtuple("Options", ["num_epoch", 
         "cnn_batch_size", "init_lr", "lstm_seq_len",
-        "max_word_len", "lstm_batch_size", "epochs"])
+        "max_word_len", "lstm_batch_size", "epochs",
+        "word_embed_dim"])
 opt = Options(num_epoch=25,
               cnn_batch_size=lstm_seq_len*lstm_batch_size,
               init_lr=1.0,
               lstm_seq_len=lstm_seq_len,
               max_word_len=max_word_len,
               lstm_batch_size=lstm_batch_size,
-              epochs=2)
+              epochs=2,
+              word_embed_dim=word_embed_dim)
 
 
 print("Network built. Start testing.")

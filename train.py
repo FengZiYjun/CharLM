@@ -83,6 +83,11 @@ def train(net, data, opt):
 
     # Log-SoftMax
     criterion = nn.CrossEntropyLoss()
+    
+    # word_emb_dim == hidden_size / num of hidden units 
+    hidden = (to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)), 
+              to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)))
+
 
     for epoch in range(num_epoch):
 
@@ -94,11 +99,14 @@ def train(net, data, opt):
         valid_generator = batch_generator(valid_input, opt.lstm_batch_size)
         vlabel_generator = batch_generator(valid_label, opt.lstm_batch_size*opt.lstm_seq_len)
 
+
         for t in range(iterations):
             batch_input = valid_generator.__next__()
             batch_label = vlabel_generator.__next__()
 
-            valid_output = net(to_var(batch_input))
+            hidden = [state.detach() for state in hidden]
+            valid_output, hidden = net(to_var(batch_input), hidden)
+
             length = valid_output.size()[0]
 
             # [num_sample-1, len(word_dict)] vs [num_sample-1]
@@ -135,9 +143,10 @@ def train(net, data, opt):
             batch_label = label_generator.__next__()
 
             # detach hidden state of LSTM from last batch
-            net.repackage_hidden()
+            #net.repackage_hidden()
             
-            output = net(to_var(batch_input))
+            hidden = [state.detach() for state in hidden]
+            output, hidden = net(to_var(batch_input), hidden)
             # [num_word, vocab_size]
             
             loss = criterion(output, to_var(batch_label))
@@ -155,45 +164,6 @@ def train(net, data, opt):
 
 
     print("Training finished.")
-
-
-
-def test(net, data, opt):
-    
-    test_input = torch.from_numpy(data.test_input)
-    test_label = torch.from_numpy(data.test_label)
-
-    num_seq = test_input.size()[0] // opt.lstm_seq_len
-    test_input = test_input[:num_seq*opt.lstm_seq_len, :]
-    # [num_seq, seq_len, max_word_len+2]
-    test_input = test_input.view(-1, opt.lstm_seq_len, opt.max_word_len+2)
-
-    criterion = nn.CrossEntropyLoss()
-
-    #output_list = []
-    loss_list = []
-    num_hits = 0
-    total = 0
-    iterations = test_input.size()[0] // opt.lstm_batch_size
-    for t in range(iterations):
-        test_output = net(to_var(test_input[t*opt.lstm_batch_size:(t+1)*opt.lstm_batch_size]))
-        
-        total += test_output.size()[0]
-        batch_label = test_label[t*opt.lstm_batch_size*opt.lstm_seq_len+1:(t+1)*opt.lstm_batch_size*opt.lstm_seq_len+1]
-
-        test_loss = criterion(test_output, to_var(batch_label)).data
-        loss_list.append(test_loss)
-        test_predict = torch.max(test_output, dim=1)[1]
-        num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
-
-    test_loss = torch.mean(torch.cat(loss_list), 0)
-    accuracy =  float(num_hits) / total
-    PPL = torch.exp(test_loss / opt.lstm_seq_len)
-
-    
-    print("Final Loss={0:.4f}".format(float(test_loss)))
-    print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
-    print("Final PPL={0:.4f}".format(float(PPL)))
 
 
 ################################################################
@@ -278,14 +248,16 @@ for param in net.parameters():
 
 Options = namedtuple("Options", ["num_epoch", 
         "cnn_batch_size", "init_lr", "lstm_seq_len",
-        "max_word_len", "lstm_batch_size", "epochs"])
+        "max_word_len", "lstm_batch_size", "epochs",
+        "word_embed_dim"])
 opt = Options(num_epoch=25,
               cnn_batch_size=lstm_seq_len*lstm_batch_size,
               init_lr=1.0,
               lstm_seq_len=lstm_seq_len,
               max_word_len=max_word_len,
               lstm_batch_size=lstm_batch_size,
-              epochs=2)
+              epochs=2,
+              word_embed_dim=word_embed_dim)
 
 
 print("Network built. Start training.")

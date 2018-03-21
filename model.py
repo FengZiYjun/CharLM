@@ -100,9 +100,9 @@ class charLM(nn.Module):
             self.char_embed = self.char_embed.cuda()
             self.linear = self.linear.cuda()
             self.batch_norm = self.batch_norm.cuda()
-        
 
-    def forward(self, x):
+
+    def forward(self, x, hidden):
         # Input: Variable of Tensor with shape [num_seq, seq_len, max_word_len+2]
         # Return: Variable of Tensor with shape [num_words, len(word_dict)]
         lstm_batch_size = x.size()[0]
@@ -129,7 +129,7 @@ class charLM(nn.Module):
         x = x.contiguous().view(lstm_batch_size,lstm_seq_len, -1)
         # [num_seq, seq_len, total_num_filters]
         
-        x, self.hidden = self.lstm(x, self.hidden)
+        x, hidden = self.lstm(x, hidden)
         # [seq_len, num_seq, hidden_size]
         
         x = self.dropout(x)
@@ -140,7 +140,7 @@ class charLM(nn.Module):
 
         x = self.linear(x)
         # [num_seq*seq_len, vocab_size]
-        return x
+        return x, hidden
 
 
     def conv_layers(self, x):
@@ -158,9 +158,8 @@ class charLM(nn.Module):
         return torch.cat(chosen_list, 1)
 
     def highway_layer(self, y):
-        transform_gate = F.sigmoid(self.fc1(y))
-        carry_gate = 1 - transform_gate
-        return transform_gate * F.relu(self.fc2(y)) + carry_gate * y
+        t = F.sigmoid(self.fc1(y))
+        return torch.mul(t, F.relu(self.fc2(y))) + torch.mul(1-t, y)
 
     def repackage_hidden(self):
         self.hidden = (Variable(self.hidden[0].data, requires_grad=True), 
