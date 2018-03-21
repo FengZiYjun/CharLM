@@ -78,7 +78,7 @@ def train(net, data, opt):
     num_epoch = opt.epochs
     num_iter_per_epoch = train_input.size()[0] // opt.lstm_batch_size
     
-    leaning_rate = opt.init_lr
+    learning_rate = opt.init_lr
     old_PPL = 100000
 
     # Log-SoftMax
@@ -122,16 +122,16 @@ def train(net, data, opt):
         print("valid loss={}".format(np.mean(loss_batch)))
         print("PPL decrease={}".format(float(old_PPL - PPL)))
 
-        if float(old_PPL - PPL) <= 1.0:
-            leaning_rate /= 2
-            print("halved lr:{}".format(leaning_rate))
+        if float(old_PPL - PPL) <= 0.8 and learning_rate > 0.03:
+            learning_rate /= 2
+            print("halved lr:{}".format(learning_rate))
 
         old_PPL = PPL
 
         ##################################################
 
         optimizer  = optim.SGD(net.parameters(), 
-                               lr = leaning_rate, 
+                               lr = learning_rate, 
                                momentum=0.85)
 
         # split the first dim
@@ -256,7 +256,7 @@ opt = Options(num_epoch=25,
               lstm_seq_len=lstm_seq_len,
               max_word_len=max_word_len,
               lstm_batch_size=lstm_batch_size,
-              epochs=25,
+              epochs=35,
               word_embed_dim=word_embed_dim)
 
 

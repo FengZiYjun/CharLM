@@ -44,12 +44,12 @@ def test(net, data, opt):
         hidden = [state.detach() for state in hidden]
         test_output, hidden = net(to_var(batch_input), hidden)
         
-        total += test_output.size()[0]
-
         test_loss = criterion(test_output, to_var(batch_label)).data
         loss_list.append(test_loss)
+        print("{} loss={}".format(t+1, float(test_loss)))
 
         test_predict = torch.max(test_output, dim=1)[1]
+        total += batch_label.size()[0]
         num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
 
     test_loss = torch.mean(torch.cat(loss_list), 0)
@@ -75,7 +75,7 @@ objetcs = torch.load("cache/prep.pt")
 
 word_dict = objetcs["word_dict"]
 char_dict = objetcs["char_dict"]
-#reverse_word_dict = objetcs["reverse_word_dict"]
+reverse_word_dict = objetcs["reverse_word_dict"]
 #word_embed_matrix = objetcs["word_embed_matrix"]
 max_word_len = objetcs["max_word_len"]
 num_words = len(word_dict)
