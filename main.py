@@ -174,19 +174,19 @@ def test(net, data, opt):
         total += test_output.size()[0]
         batch_label = test_label[t*opt.lstm_batch_size*opt.lstm_seq_len+1:(t+1)*opt.lstm_batch_size*opt.lstm_seq_len+1]
 
-        test_loss = criterion(test_output, to_var(batch_label))
+        test_loss = criterion(test_output, to_var(batch_label)).data
         loss_list.append(test_loss)
         test_predict = torch.max(test_output, dim=1)[1]
         num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
 
-    test_loss = torch.mean(loss_list)
-    accuracy =  num_hits / total
+    test_loss = torch.mean(torch.cat(loss_list), 0)
+    accuracy =  float(num_hits) / total
     PPL = torch.exp(test_loss / opt.lstm_seq_len)
 
     
-    print("Final Loss={0:.4f}".format(float(test_loss.data)))
+    print("Final Loss={0:.4f}".format(float(test_loss)))
     print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
-    print("Final PPL={0:.4f}".format(float(PPL.data)))
+    print("Final PPL={0:.4f}".format(float(PPL)))
 
 
 ################################################################
@@ -285,7 +285,7 @@ print("Network built. Start training.")
 
 
 
-
+'''
 try:
     train(net, data, opt)
 except KeyboardInterrupt:
@@ -295,8 +295,9 @@ except KeyboardInterrupt:
 
 torch.save(net.state_dict(), "cache/model.pt")
 print("Model saved.")
+'''
 
-#net.load_state_dict(torch.load("cache/model.pt"))
+net.load_state_dict(torch.load("cache/model.pt"))
 test(net, data, opt)
 
 
