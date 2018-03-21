@@ -10,6 +10,12 @@ from model import charLM
 from utilities import *
 from collections import namedtuple
 
+"""
+1. seperate hidden from net, reset zeros for every new epoch and testing
+2. 
+
+"""
+
 
 def preprocess(word_embed_dim):
     
@@ -98,7 +104,7 @@ def train(net, data, opt):
             # [num_sample-1, len(word_dict)] vs [num_sample-1]
             valid_loss = criterion(valid_output, to_var(batch_label))
 
-            PPL = torch.exp(valid_loss.data / opt.lstm_seq_len)
+            PPL = torch.exp(valid_loss.data)
 
             loss_batch.append(float(valid_loss))
             PPL_batch.append(float(PPL))
@@ -142,8 +148,9 @@ def train(net, data, opt):
             optimizer.step()
             
             
-            if t % 300 == 0:
-                print("[epoch {} step {}] train loss={}".format(epoch+1, t+1, float(loss.data)))
+            if (t+1) % 100 == 0:
+                print("[epoch {} step {}] train loss={0:.4f}, Perplexity={0:.4f}".format(epoch+1, 
+                    t+1, float(loss.data), np.exp(float(loss.data))))
 
 
 
@@ -285,7 +292,7 @@ print("Network built. Start training.")
 
 
 
-'''
+
 try:
     train(net, data, opt)
 except KeyboardInterrupt:
@@ -295,10 +302,8 @@ except KeyboardInterrupt:
 
 torch.save(net.state_dict(), "cache/model.pt")
 print("Model saved.")
-'''
 
-net.load_state_dict(torch.load("cache/model.pt"))
-test(net, data, opt)
+
 
 
 
