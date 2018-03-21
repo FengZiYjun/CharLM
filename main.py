@@ -86,11 +86,11 @@ def train(net, data, opt):
         iterations = valid_input.size()[0] // opt.lstm_batch_size
         
         valid_generator = batch_generator(valid_input, opt.lstm_batch_size)
-        label_generator = batch_generator(valid_label, opt.lstm_batch_size*opt.lstm_seq_len)
+        vlabel_generator = batch_generator(valid_label, opt.lstm_batch_size*opt.lstm_seq_len)
 
         for t in range(iterations):
             batch_input = valid_generator.__next__()
-            batch_label = label_generator.__next__()
+            batch_label = vlabel_generator.__next__()
 
             valid_output = net(to_var(batch_input))
             length = valid_output.size()[0]
@@ -143,7 +143,7 @@ def train(net, data, opt):
             
             
             if t % 300 == 0:
-                print("[epoch {} step {}] train loss={0:.4f}".format(epoch+1, t+1, float(loss.data)))
+                print("[epoch {} step {}] train loss={}".format(epoch+1, t+1, float(loss.data)))
 
 
 
@@ -224,14 +224,14 @@ if os.path.exists("cache/data_sets.pt") is False:
     test_label  = np.array([word_dict[w] for w in test_text[1:]] + [word_dict[test_text[-1]]])
 
     category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
-                "tlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
+                "trlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
     torch.save(category, "cache/data_sets.pt") 
 else:
     data_sets = torch.load("cache/data_sets.pt")
     train_set = data_sets["tdata"]
     valid_set = data_sets["vdata"]
     test_set  = data_sets["test"]
-    train_label = data_sets["tlabel"]
+    train_label = data_sets["trlabel"]
     valid_label = data_sets["vlabel"]
     test_label = data_sets["tlabel"]
 
