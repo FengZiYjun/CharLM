@@ -9,7 +9,7 @@ import os
 from model import charLM
 from utilities import *
 from collections import namedtuple
-from test import *
+from test import test
 
 """
 1. seperate hidden from net, reset zeros for every new epoch and testing
@@ -273,9 +273,9 @@ except KeyboardInterrupt:
     print('Exiting from training early')
 
 
+torch.save(net, "cache/net.pkl")
+print("save net")
 
 #net.load_state_dict(torch.load("cache/model.pt"))
-print("start testing.")
+
 test(net, data, opt)
-
-
