@@ -9,6 +9,7 @@ import os
 from model import charLM
 from utilities import *
 from collections import namedtuple
+from test import *
 
 """
 1. seperate hidden from net, reset zeros for every new epoch and testing
@@ -92,6 +93,7 @@ def train(net, data, opt):
     for epoch in range(num_epoch):
 
         ##############  Validation  ####################
+        net.eval()
         loss_batch = []
         PPL_batch = []
         iterations = valid_input.size()[0] // opt.lstm_batch_size
@@ -129,7 +131,7 @@ def train(net, data, opt):
         old_PPL = PPL
 
         ##################################################
-
+        net.train()
         optimizer  = optim.SGD(net.parameters(), 
                                lr = learning_rate, 
                                momentum=0.85)
@@ -162,7 +164,7 @@ def train(net, data, opt):
                     t+1, float(loss.data), float(np.exp(loss.data))))
 
 
-
+    torch.save(net.state_dict(), "cache/model.pt")
     print("Training finished.")
 
 
@@ -264,7 +266,6 @@ print("Network built. Start training.")
 
 
 
-
 try:
     train(net, data, opt)
 except KeyboardInterrupt:
@@ -272,10 +273,9 @@ except KeyboardInterrupt:
     print('Exiting from training early')
 
 
-torch.save(net.state_dict(), "cache/model.pt")
-print("Model saved.")
 
-
-
+#net.load_state_dict(torch.load("cache/model.pt"))
+print("start testing.")
+test(net, data, opt)
 
 

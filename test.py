@@ -15,7 +15,8 @@ def to_var(x):
 
 
 def test(net, data, opt):
-    
+    net.eval()
+ 
     test_input = torch.from_numpy(data.test_input)
     test_label = torch.from_numpy(data.test_label)
 
@@ -37,29 +38,32 @@ def test(net, data, opt):
     hidden = (to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)), 
               to_var(torch.zeros(2, opt.lstm_batch_size, opt.word_embed_dim)))
     
+    add_loss = 0.0 
     for t in range(iterations):
         batch_input = test_generator.__next__ ()
         batch_label = label_generator.__next__()
-
+        
+        net.zero_grad()
         hidden = [state.detach() for state in hidden]
         test_output, hidden = net(to_var(batch_input), hidden)
         
         test_loss = criterion(test_output, to_var(batch_label)).data
         loss_list.append(test_loss)
-        print("{} loss={}".format(t+1, float(test_loss)))
+        add_loss += test_loss
+        #print("{} loss={}".format(t+1, float(add_loss) / (t+1)))
 
-        test_predict = torch.max(test_output, dim=1)[1]
-        total += batch_label.size()[0]
-        num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
+        #test_predict = torch.max(test_output, dim=1)[1]
+        #total += batch_label.size()[0]
+        #num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
 
-    test_loss = torch.mean(torch.cat(loss_list), 0)
-    accuracy =  float(num_hits) / total
-    PPL = torch.exp(test_loss)
+    #test_loss = torch.mean(torch.cat(loss_list), 0)
+    #accuracy =  float(num_hits) / total
+    #PPL = torch.exp(test_loss)
 
     
-    print("Final Loss={0:.4f}".format(float(test_loss)))
-    print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
-    print("Final PPL={0:.4f}".format(float(PPL)))
+    print("Final Loss={0:.4f}".format(float(add_loss) / iterations))
+    #print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
+    print("Final PPL={0:.4f}".format(float(np.exp(add_loss / iterations))))
 
 
 #############################################################
@@ -98,11 +102,13 @@ else:
     data_sets = torch.load("cache/data_sets.pt")
     test_set  = data_sets["test"]
     test_label = data_sets["tlabel"]
+    train_set = data_sets["tdata"]
+    train_label = data_sets["trlabel"]
 
 
-DataTuple = namedtuple("DataTuple", "test_input test_label")
+DataTuple = namedtuple("DataTuple", "test_input test_label train_input train_label ")
 data = DataTuple( test_input=test_set,
-                 test_label=test_label)
+                 test_label=test_label, train_label=train_label, train_input=train_set)
 
 print("Loaded data sets. Start building network.")
 
