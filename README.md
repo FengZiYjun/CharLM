@@ -1,7 +1,7 @@
 
 # PyTorch-Character-Aware-Neural-Language-Model
 
-This is the PyTorch implementation of character-aware neural language model proposed in this paper by Yoon Kim. ![https://arxiv.org/abs/1508.06615](https://arxiv.org/abs/1508.06615)
+This is the PyTorch implementation of character-aware neural language model proposed in this [paper](https://arxiv.org/abs/1508.06615) by Yoon Kim. 
 
 ## Requiredments
 The code is run and tested with Python 3.5 and PyTorch 0.3.1.
@@ -30,6 +30,7 @@ This yields PPl=131.4480, cross entropy loss=4.8.
 
 ## Acknowledgement 
 https://github.com/jarfo/kchar
+
 https://github.com/cronos123/Character-Aware-Neural-Language-Models
 
 
