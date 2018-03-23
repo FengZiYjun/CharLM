@@ -12,7 +12,7 @@ from collections import namedtuple
 from test import test
 
 
-def preprocess(word_embed_dim):
+def preprocess():
     
     word_dict, char_dict = create_word_char_dict("valid.txt", "train.txt", "test.txt")
     num_words = len(word_dict)
@@ -65,6 +65,7 @@ def train(net, data, opt):
     
     learning_rate = opt.init_lr
     old_PPL = 100000
+    best_PPL = 100000
 
     # Log-SoftMax
     criterion = nn.CrossEntropyLoss()
@@ -76,7 +77,7 @@ def train(net, data, opt):
 
     for epoch in range(num_epoch):
 
-        ##############  Validation  ####################
+        ################  Validation  ####################
         net.eval()
         loss_batch = []
         PPL_batch = []
@@ -108,6 +109,13 @@ def train(net, data, opt):
         print("valid loss={}".format(np.mean(loss_batch)))
         print("PPL decrease={}".format(float(old_PPL - PPL)))
 
+        # Preserve the best model
+        if best_PPL > PPL:
+            best_PPL = PPL
+            torch.save(net.state_dict(), "model.pt")
+            torch.save(net, "net.pkl")
+
+        # Adjust the learning rate
         if float(old_PPL - PPL) <= 0.8 and learning_rate > 0.03:
             learning_rate /= 2
             print("halved lr:{}".format(learning_rate))
@@ -115,6 +123,7 @@ def train(net, data, opt):
         old_PPL = PPL
 
         ##################################################
+        #################### Training ####################
         net.train()
         optimizer  = optim.SGD(net.parameters(), 
                                lr = learning_rate, 
@@ -143,7 +152,7 @@ def train(net, data, opt):
             
             
             if (t+1) % 100 == 0:
-                print("[epoch {} step {}] train loss={}, Perplexity={}".format(epoch+1, 
+                print("[epoch {} step {}] train loss={0:.4f}, Perplexity={0:.4f}".format(epoch+1, 
                     t+1, float(loss.data), float(np.exp(loss.data))))
 
 
@@ -153,111 +162,107 @@ def train(net, data, opt):
 
 ################################################################
 
-word_embed_dim = 300
-char_embedding_dim = 15
+if __name__=="__main__":
 
-if os.path.exists("cache/prep.pt") is False:
-    preprocess(word_embed_dim)
+    word_embed_dim = 300
+    char_embedding_dim = 15
 
-objetcs = torch.load("cache/prep.pt")
+    if os.path.exists("cache/prep.pt") is False:
+        preprocess()
 
-word_dict = objetcs["word_dict"]
-char_dict = objetcs["char_dict"]
-reverse_word_dict = objetcs["reverse_word_dict"]
-#word_embed_matrix = objetcs["word_embed_matrix"]
-max_word_len = objetcs["max_word_len"]
-num_words = len(word_dict)
+    objetcs = torch.load("cache/prep.pt")
 
-print("word/char dictionary built. Start making inputs.")
+    word_dict = objetcs["word_dict"]
+    char_dict = objetcs["char_dict"]
+    reverse_word_dict = objetcs["reverse_word_dict"]
+    max_word_len = objetcs["max_word_len"]
+    num_words = len(word_dict)
 
-
-if os.path.exists("cache/data_sets.pt") is False:
-    train_text = read_data("./train.txt")
-    valid_text = read_data("./valid.txt")
-    test_text  = read_data("./test.txt")
-
-    train_set = np.array(text2vec(train_text, char_dict, max_word_len))
-    valid_set = np.array(text2vec(valid_text, char_dict, max_word_len))
-    test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
-
-    # Labels are next-word index in word_dict with the same length as inputs
-    train_label = np.array([word_dict[w] for w in train_text[1:]] + [word_dict[train_text[-1]]])
-    valid_label = np.array([word_dict[w] for w in valid_text[1:]] + [word_dict[valid_text[-1]]])
-    test_label  = np.array([word_dict[w] for w in test_text[1:]] + [word_dict[test_text[-1]]])
-
-    category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
-                "trlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
-    torch.save(category, "cache/data_sets.pt") 
-else:
-    data_sets = torch.load("cache/data_sets.pt")
-    train_set = data_sets["tdata"]
-    valid_set = data_sets["vdata"]
-    test_set  = data_sets["test"]
-    train_label = data_sets["trlabel"]
-    valid_label = data_sets["vlabel"]
-    test_label = data_sets["tlabel"]
+    print("word/char dictionary built. Start making inputs.")
 
 
-DataTuple = namedtuple("DataTuple", 
-            "train_input train_label valid_input valid_label test_input test_label")
-data = DataTuple(train_input=train_set,
-                 train_label=train_label,
-                 valid_input=valid_set,
-                 valid_label=valid_label,
-                 test_input=test_set,
-                 test_label=test_label)
+    if os.path.exists("cache/data_sets.pt") is False:
+        train_text = read_data("./train.txt")
+        valid_text = read_data("./valid.txt")
+        test_text  = read_data("./test.txt")
 
-print("Loaded data sets. Start building network.")
+        train_set = np.array(text2vec(train_text, char_dict, max_word_len))
+        valid_set = np.array(text2vec(valid_text, char_dict, max_word_len))
+        test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
 
+        # Labels are next-word index in word_dict with the same length as inputs
+        train_label = np.array([word_dict[w] for w in train_text[1:]] + [word_dict[train_text[-1]]])
+        valid_label = np.array([word_dict[w] for w in valid_text[1:]] + [word_dict[valid_text[-1]]])
+        test_label  = np.array([word_dict[w] for w in test_text[1:]] + [word_dict[test_text[-1]]])
 
-
-USE_GPU = True
-cnn_batch_size = 700
-
-lstm_seq_len = 35  # BPTT for 35 time steps
-lstm_batch_size = 20
-# cnn_batch_size == lstm_seq_len * lstm_batch_size
-
-net = charLM(char_embedding_dim, 
-            word_embed_dim, 
-            lstm_seq_len,
-            lstm_batch_size,
-            num_words,
-            len(char_dict),
-            max_word_len,
-            use_gpu=USE_GPU)
-
-for param in net.parameters():
-    nn.init.uniform(param.data, -0.05, 0.05)
+        category = {"tdata":train_set, "vdata":valid_set, "test": test_set, 
+                    "trlabel":train_label, "vlabel":valid_label, "tlabel":test_label}
+        torch.save(category, "cache/data_sets.pt") 
+    else:
+        data_sets = torch.load("cache/data_sets.pt")
+        train_set = data_sets["tdata"]
+        valid_set = data_sets["vdata"]
+        test_set  = data_sets["test"]
+        train_label = data_sets["trlabel"]
+        valid_label = data_sets["vlabel"]
+        test_label = data_sets["tlabel"]
 
 
-Options = namedtuple("Options", ["num_epoch", 
-        "cnn_batch_size", "init_lr", "lstm_seq_len",
-        "max_word_len", "lstm_batch_size", "epochs",
-        "word_embed_dim"])
-opt = Options(num_epoch=25,
-              cnn_batch_size=lstm_seq_len*lstm_batch_size,
-              init_lr=1.0,
-              lstm_seq_len=lstm_seq_len,
-              max_word_len=max_word_len,
-              lstm_batch_size=lstm_batch_size,
-              epochs=35,
-              word_embed_dim=word_embed_dim)
+    DataTuple = namedtuple("DataTuple", 
+                "train_input train_label valid_input valid_label test_input test_label")
+    data = DataTuple(train_input=train_set,
+                     train_label=train_label,
+                     valid_input=valid_set,
+                     valid_label=valid_label,
+                     test_input=test_set,
+                     test_label=test_label)
 
-
-print("Network built. Start training.")
+    print("Loaded data sets. Start building network.")
 
 
 
-try:
-    train(net, data, opt)
-except KeyboardInterrupt:
-    print('-' * 89)
-    print('Exiting from training early')
+    USE_GPU = True
+    cnn_batch_size = 700
+    lstm_seq_len = 35
+    lstm_batch_size = 20
+    # cnn_batch_size == lstm_seq_len * lstm_batch_size
+
+    net = charLM(char_embedding_dim, 
+                word_embed_dim, 
+                num_words,
+                len(char_dict),
+                use_gpu=USE_GPU)
+
+    for param in net.parameters():
+        nn.init.uniform(param.data, -0.05, 0.05)
 
 
-torch.save(net, "cache/net.pkl")
-print("save net")
+    Options = namedtuple("Options", [
+            "cnn_batch_size", "init_lr", "lstm_seq_len",
+            "max_word_len", "lstm_batch_size", "epochs",
+            "word_embed_dim"])
+    opt = Options(cnn_batch_size=lstm_seq_len*lstm_batch_size,
+                  init_lr=1.0,
+                  lstm_seq_len=lstm_seq_len,
+                  max_word_len=max_word_len,
+                  lstm_batch_size=lstm_batch_size,
+                  epochs=35,
+                  word_embed_dim=word_embed_dim)
 
 
-test(net, data, opt)
+    print("Network built. Start training.")
+
+
+    # You can stop training anytime by "ctrl+C"
+    try:
+        train(net, data, opt)
+    except KeyboardInterrupt:
+        print('-' * 89)
+        print('Exiting from training early')
+
+
+    torch.save(net, "cache/net.pkl")
+    print("save net")
+
+
+    test(net, data, opt)
