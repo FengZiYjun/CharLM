@@ -4,10 +4,17 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
-"""
-2. two layers of highways (remain 1)
-3. Use sequential to define combined layers (not urgent)
-"""
+
+class Highway(nn.Module):
+    """Highway network"""
+    def __init__(self, input_size):
+        super(Highway, self).__init__()
+        self.fc1 = nn.Linear(input_size, input_size, bias=True)
+        self.fc2 = nn.Linear(input_size, input_size, bias=True)
+
+    def forward(self, x):
+        t = F.sigmoid(self.fc1(x))
+        return torch.mul(t, F.relu(self.fc2(x))) + torch.mul(1-t, x)
 
 
 class charLM(nn.Module):
@@ -19,24 +26,16 @@ class charLM(nn.Module):
     # Arguments:
         char_emb_dim: the size of each character's embedding
         word_emb_dim: the size of each word's embedding
-        lstm_seq_len: num of words in a LSTM sequence / num of time steps that LSTM goes through
-        lstm_batch_size: num of sequences in a "LSTM" batch
         vocab_size: num of unique words
-        num_char: total number of characters in all data sets
+        num_char: num of characters
         use_gpu: True or False
     """
-    def __init__(self, char_emb_dim, word_emb_dim, 
-                lstm_seq_len, lstm_batch_size, 
-                vocab_size, num_char, max_word_len,
-                use_gpu):
+    def __init__(self, char_emb_dim, word_emb_dim,  
+                vocab_size, num_char, use_gpu):
         super(charLM, self).__init__()
         self.char_emb_dim = char_emb_dim
         self.word_emb_dim = word_emb_dim
-        self.lstm_seq_len = lstm_seq_len
-        self.lstm_batch_size = lstm_batch_size
         self.vocab_size = vocab_size
-        self.use_gpu = use_gpu
-        self.max_word_len = max_word_len
 
         # char embedding layer
         self.char_embed = nn.Embedding(num_char, char_emb_dim)
@@ -62,19 +61,11 @@ class charLM(nn.Module):
         self.batch_norm = nn.BatchNorm1d(self.highway_input_dim, affine=False)
 
         # highway net
-        self.fc1 = nn.Linear(self.highway_input_dim, self.highway_input_dim, bias=True)
-        self.fc2 = nn.Linear(self.highway_input_dim, self.highway_input_dim, bias=True)
+        self.highway1 = Highway(self.highway_input_dim)
+        self.highway2 = Highway(self.highway_input_dim)
 
         # LSTM
         self.lstm_num_layers = 2
-        # num of hidden units == word_embedding_dim
-        self.hidden = (Variable(torch.zeros(self.lstm_num_layers, 
-                                            self.lstm_batch_size, 
-                                            self.word_emb_dim)),
-                       Variable(torch.zeros(self.lstm_num_layers, 
-                                            self.lstm_batch_size, 
-                                            self.word_emb_dim))
-                       )
 
         self.lstm = nn.LSTM(input_size=self.highway_input_dim, 
                             hidden_size=self.word_emb_dim, 
@@ -84,12 +75,11 @@ class charLM(nn.Module):
                             batch_first=True)
 
         # output layer
-        #self.emb_bias = Variable(torch.zeros(self.vocab_size))
         self.dropout = nn.Dropout(p=0.5)
         self.linear = nn.Linear(self.word_emb_dim, self.vocab_size)
 
         
-        if self.use_gpu is True:
+        if use_gpu is True:
             for x in range(len(self.convolutions)):
                 self.convolutions[x] = self.convolutions[x].cuda()
             self.fc1 = self.fc1.cuda()
@@ -123,7 +113,8 @@ class charLM(nn.Module):
         x = self.batch_norm(x)
         # [num_seq*seq_len, total_num_filters]
 
-        x = self.highway_layer(x)
+        x = self.highway1(x)
+        x = self.highway2(x)
         # [num_seq*seq_len, total_num_filters]
 
         x = x.contiguous().view(lstm_batch_size,lstm_seq_len, -1)
@@ -156,11 +147,3 @@ class charLM(nn.Module):
         
         # (batch_size, total_num_filers)
         return torch.cat(chosen_list, 1)
-
-    def highway_layer(self, y):
-        t = F.sigmoid(self.fc1(y))
-        return torch.mul(t, F.relu(self.fc2(y))) + torch.mul(1-t, y)
-
-    def repackage_hidden(self):
-        self.hidden = (Variable(self.hidden[0].data, requires_grad=True), 
-                        Variable(self.hidden[1].data, requires_grad=True))

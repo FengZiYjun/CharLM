@@ -27,7 +27,6 @@ def test(net, data, opt):
 
     criterion = nn.CrossEntropyLoss()
 
-    #output_list = []
     loss_list = []
     num_hits = 0
     total = 0
@@ -51,8 +50,8 @@ def test(net, data, opt):
         loss_list.append(test_loss)
         add_loss += test_loss
 
-    print("Final Loss={0:.4f}".format(float(add_loss) / iterations))
-    print("Final PPL={0:.4f}".format(float(np.exp(add_loss / iterations))))
+    print("Test Loss={0:.4f}".format(float(add_loss) / iterations))
+    print("Test PPL={0:.4f}".format(float(np.exp(add_loss / iterations))))
 
 
 #############################################################
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     char_embedding_dim = 15
 
     if os.path.exists("cache/prep.pt") is False:
-        preprocess(word_embed_dim)
+        print("Cannot find prep.pt")
 
     objetcs = torch.load("cache/prep.pt")
 
@@ -79,7 +78,6 @@ if __name__ == "__main__":
     if os.path.exists("cache/data_sets.pt") is False:
         
         test_text  = read_data("./test.txt")
-
         test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
 
         # Labels are next-word index in word_dict with the same length as inputs
@@ -105,29 +103,21 @@ if __name__ == "__main__":
 
     USE_GPU = True
     cnn_batch_size = 700
-
-    lstm_seq_len = 35  # BPTT for 35 time steps
+    lstm_seq_len = 35 
     lstm_batch_size = 20
     
+
     net = torch.load("cache/net.pkl")
     
-
-    Options = namedtuple("Options", ["num_epoch", 
-            "cnn_batch_size", "init_lr", "lstm_seq_len",
-            "max_word_len", "lstm_batch_size", "epochs",
-            "word_embed_dim"])
-    opt = Options(num_epoch=25,
-                  cnn_batch_size=lstm_seq_len*lstm_batch_size,
-                  init_lr=1.0,
+    Options = namedtuple("Options", [ "cnn_batch_size", "lstm_seq_len",
+            "max_word_len", "lstm_batch_size", "word_embed_dim"])
+    opt = Options(cnn_batch_size=lstm_seq_len*lstm_batch_size,
                   lstm_seq_len=lstm_seq_len,
                   max_word_len=max_word_len,
                   lstm_batch_size=lstm_batch_size,
-                  epochs=2,
                   word_embed_dim=word_embed_dim)
 
 
     print("Network built. Start testing.")
-
-
 
     test(net, data, opt)
