@@ -63,7 +63,6 @@ if __name__ == "__main__":
 
     if os.path.exists("cache/prep.pt") is False:
         print("Cannot find prep.pt")
-        return
 
     objetcs = torch.load("cache/prep.pt")
 

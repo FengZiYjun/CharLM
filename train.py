@@ -112,8 +112,8 @@ def train(net, data, opt):
         # Preserve the best model
         if best_PPL > PPL:
             best_PPL = PPL
-            torch.save(net.state_dict(), "model.pt")
-            torch.save(net, "net.pkl")
+            torch.save(net.state_dict(), "cache/model.pt")
+            torch.save(net, "cache/net.pkl")
 
         # Adjust the learning rate
         if float(old_PPL - PPL) <= 0.8 and learning_rate > 0.03:
