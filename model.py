@@ -82,9 +82,8 @@ class charLM(nn.Module):
         if use_gpu is True:
             for x in range(len(self.convolutions)):
                 self.convolutions[x] = self.convolutions[x].cuda()
-            self.fc1 = self.fc1.cuda()
-            self.fc2 = self.fc2.cuda()
-            self.hidden = (self.hidden[0].cuda(), self.hidden[1].cuda())
+            self.highway1 = self.highway1.cuda()
+            self.highway2 = self.highway2.cuda()
             self.lstm = self.lstm.cuda()
             self.dropout = self.dropout.cuda()
             self.char_embed = self.char_embed.cuda()

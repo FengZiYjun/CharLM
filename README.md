@@ -26,10 +26,13 @@ Test the model.
 
 `python test.py`
 
-This yields PPl=131.4480, cross entropy loss=4.8.
+Best result on test set: 
+PPl=127.2163
+cross entropy loss=4.8459
 
 ## Acknowledgement 
 This implementation borrowed ideas from
+
 https://github.com/jarfo/kchar
 
 https://github.com/cronos123/Character-Aware-Neural-Language-Models
