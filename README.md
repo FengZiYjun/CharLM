@@ -4,7 +4,7 @@
 This is the PyTorch implementation of character-aware neural language model proposed in this [paper](https://arxiv.org/abs/1508.06615) by Yoon Kim. 
 
 ## Requiredments
-The code is run and tested with Python 3.5 and PyTorch 0.3.1.
+The code is run and tested with **Python 3.5.2** and **PyTorch 0.3.1**.
 
 ## HyperParameters
 | HyperParam | value |
@@ -29,6 +29,7 @@ Test the model.
 This yields PPl=131.4480, cross entropy loss=4.8.
 
 ## Acknowledgement 
+This implementation borrowed ideas from
 https://github.com/jarfo/kchar
 
 https://github.com/cronos123/Character-Aware-Neural-Language-Models
