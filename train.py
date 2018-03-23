@@ -152,7 +152,7 @@ def train(net, data, opt):
             
             
             if (t+1) % 100 == 0:
-                print("[epoch {} step {}] train loss={0:.4f}, Perplexity={0:.4f}".format(epoch+1, 
+                print("[epoch {} step {}] train loss={}, Perplexity={}".format(epoch+1, 
                     t+1, float(loss.data), float(np.exp(loss.data))))
 
 
