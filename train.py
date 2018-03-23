@@ -124,7 +124,7 @@ def train(net, data, opt):
         print("valid loss={}".format(np.mean(loss_batch)))
         print("PPL decrease={}".format(float(old_PPL - PPL)))
 
-        if float(old_PPL - PPL) <= 0.8 and learning_rate > 0.03:
+        if float(old_PPL - PPL) <= 1.0:
             learning_rate /= 2
             print("halved lr:{}".format(learning_rate))
 
