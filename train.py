@@ -116,7 +116,7 @@ def train(net, data, opt):
             torch.save(net, "cache/net.pkl")
 
         # Adjust the learning rate
-        if float(old_PPL - PPL) <= 0.8 and learning_rate > 0.03:
+        if float(old_PPL - PPL) <= 1.0:
             learning_rate /= 2
             print("halved lr:{}".format(learning_rate))
 
@@ -152,7 +152,7 @@ def train(net, data, opt):
             
             
             if (t+1) % 100 == 0:
-                print("[epoch {} step {}] train loss={0:.4f}, Perplexity={0:.4f}".format(epoch+1, 
+                print("[epoch {} step {}] train loss={}, Perplexity={}".format(epoch+1, 
                     t+1, float(loss.data), float(np.exp(loss.data))))
 
 
