@@ -27,7 +27,6 @@ def test(net, data, opt):
 
     criterion = nn.CrossEntropyLoss()
 
-    #output_list = []
     loss_list = []
     num_hits = 0
     total = 0
@@ -50,20 +49,9 @@ def test(net, data, opt):
         test_loss = criterion(test_output, to_var(batch_label)).data
         loss_list.append(test_loss)
         add_loss += test_loss
-        #print("{} loss={}".format(t+1, float(add_loss) / (t+1)))
 
-        #test_predict = torch.max(test_output, dim=1)[1]
-        #total += batch_label.size()[0]
-        #num_hits += torch.sum((batch_label.cuda() == test_predict.data).int())
-
-    #test_loss = torch.mean(torch.cat(loss_list), 0)
-    #accuracy =  float(num_hits) / total
-    #PPL = torch.exp(test_loss)
-
-    
-    print("Final Loss={0:.4f}".format(float(add_loss) / iterations))
-    #print("Accuracy={0:.4f}%".format(100 * float(accuracy)))
-    print("Final PPL={0:.4f}".format(float(np.exp(add_loss / iterations))))
+    print("Test Loss={0:.4f}".format(float(add_loss) / iterations))
+    print("Test PPL={0:.4f}".format(float(np.exp(add_loss / iterations))))
 
 
 #############################################################
@@ -74,14 +62,13 @@ if __name__ == "__main__":
     char_embedding_dim = 15
 
     if os.path.exists("cache/prep.pt") is False:
-        preprocess(word_embed_dim)
+        print("Cannot find prep.pt")
 
     objetcs = torch.load("cache/prep.pt")
 
     word_dict = objetcs["word_dict"]
     char_dict = objetcs["char_dict"]
     reverse_word_dict = objetcs["reverse_word_dict"]
-    #word_embed_matrix = objetcs["word_embed_matrix"]
     max_word_len = objetcs["max_word_len"]
     num_words = len(word_dict)
 
@@ -91,7 +78,6 @@ if __name__ == "__main__":
     if os.path.exists("cache/data_sets.pt") is False:
         
         test_text  = read_data("./test.txt")
-
         test_set  = np.array(text2vec(test_text,  char_dict, max_word_len))
 
         # Labels are next-word index in word_dict with the same length as inputs
@@ -117,43 +103,21 @@ if __name__ == "__main__":
 
     USE_GPU = True
     cnn_batch_size = 700
-
-    lstm_seq_len = 35  # BPTT for 35 time steps
+    lstm_seq_len = 35 
     lstm_batch_size = 20
-    # cnn_batch_size == lstm_seq_len * lstm_batch_size
-    '''
-    net = charLM(char_embedding_dim, 
-                word_embed_dim, 
-                lstm_seq_len,
-                lstm_batch_size,
-                num_words,
-                len(char_dict),
-                max_word_len,
-                use_gpu=USE_GPU)
+    
 
-    net.load_state_dict(torch.load("cache/model.pt"))
-    '''
     net = torch.load("cache/net.pkl")
-    #for param in net.parameters():
-    #    nn.init.uniform(param.data, -0.05, 0.05)
-
-
-    Options = namedtuple("Options", ["num_epoch", 
-            "cnn_batch_size", "init_lr", "lstm_seq_len",
-            "max_word_len", "lstm_batch_size", "epochs",
-            "word_embed_dim"])
-    opt = Options(num_epoch=25,
-                  cnn_batch_size=lstm_seq_len*lstm_batch_size,
-                  init_lr=1.0,
+    
+    Options = namedtuple("Options", [ "cnn_batch_size", "lstm_seq_len",
+            "max_word_len", "lstm_batch_size", "word_embed_dim"])
+    opt = Options(cnn_batch_size=lstm_seq_len*lstm_batch_size,
                   lstm_seq_len=lstm_seq_len,
                   max_word_len=max_word_len,
                   lstm_batch_size=lstm_batch_size,
-                  epochs=2,
                   word_embed_dim=word_embed_dim)
 
 
     print("Network built. Start testing.")
-
-
 
     test(net, data, opt)
