@@ -11,12 +11,6 @@ from utilities import *
 from collections import namedtuple
 from test import test
 
-"""
-1. seperate hidden from net, reset zeros for every new epoch and testing
-2. 
-
-"""
-
 
 def preprocess(word_embed_dim):
     
@@ -31,20 +25,10 @@ def preprocess(word_embed_dim):
     reverse_word_dict = {value:key for key, value in word_dict.items()}
     max_word_len = max([len(word) for word in word_dict])
 
-    #word_embedding = nn.Embedding(vocab_size, word_embed_dim)
-    #char_embedding = nn.Embedding(num_char, char_embedding_dim)
-
-    # Note: detach embedding weights from the auto_grad graph.
-    # PyTorch embedding weights are learnable variables by default.
-    #char_embedding.weight.requires_grad = False
-    #word_embedding.weight.requires_grad = False
-    #word_emb_matrix = word_embedding.weight
-
     objects = {
         "word_dict": word_dict,
         "char_dict": char_dict,
         "reverse_word_dict": reverse_word_dict,
-        #"word_embed_matrix": word_embed_matrix,
         "max_word_len": max_word_len
     }
     
@@ -145,9 +129,8 @@ def train(net, data, opt):
             batch_label = label_generator.__next__()
 
             # detach hidden state of LSTM from last batch
-            #net.repackage_hidden()
-            
             hidden = [state.detach() for state in hidden]
+
             output, hidden = net(to_var(batch_input), hidden)
             # [num_word, vocab_size]
             
@@ -276,6 +259,5 @@ except KeyboardInterrupt:
 torch.save(net, "cache/net.pkl")
 print("save net")
 
-#net.load_state_dict(torch.load("cache/model.pt"))
 
 test(net, data, opt)
