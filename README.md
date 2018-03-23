@@ -3,7 +3,7 @@
 
 This is the PyTorch implementation of character-aware neural language model proposed in this [paper](https://arxiv.org/abs/1508.06615) by Yoon Kim. 
 
-## Requiredments
+## Requirements
 The code is run and tested with **Python 3.5.2** and **PyTorch 0.3.1**.
 
 ## HyperParameters
