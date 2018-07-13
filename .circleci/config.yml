@@ -48,7 +48,7 @@ jobs:
           name: run tests
           command: |
             . venv/bin/activate
-            python unittest.py
+            python train.py
 
       - store_artifacts:
           path: test-reports
