@@ -32,8 +32,11 @@ jobs:
           command: |
             python3 -m venv venv
             . venv/bin/activate
-            pip install -r requirements.txt
-            pip install numpy -I
+            # pip install -r requirements.txt
+            pip3 install numpy -I
+            pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp35-cp35m-linux_x86_64.whl 
+            pip3 install torchvision
+            
 
       - save_cache:
           paths:
