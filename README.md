@@ -1,7 +1,10 @@
 
 # PyTorch-Character-Aware-Neural-Language-Model
+[![Build Status](https://circleci.com/gh/FengZiYjun/CharLM.svg?style=shield&circle-token=:circle-token)]()
+[![GitHub license](http://dmlc.github.io/img/apache2.svg)](./LICENSE)
 
 This is the PyTorch implementation of character-aware neural language model proposed in this [paper](https://arxiv.org/abs/1508.06615) by Yoon Kim. 
+
 
 ## Requirements
 The code is run and tested with **Python 3.5.2** and **PyTorch 0.3.1**.
