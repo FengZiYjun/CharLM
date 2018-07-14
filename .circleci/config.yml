@@ -22,6 +22,12 @@ jobs:
     steps:
       - checkout
       - run: echo "A first hello"
+
+  test:
+    docker:
+      - image: continuumio/miniconda3
+    steps:
+      - checkout
       - run:
           commend: conda create -n conda_env
       - run: 
@@ -30,11 +36,6 @@ jobs:
           commend: conda install pytorch-cpu torchvision-cpu -c pytorch
       - run:
           commend: conda install numpy -I
-  test:
-    docker:
-      - image: continuumio/miniconda3
-    steps:
-      - checkout
       - run: echo "complete"
       - run: python train.py
 
