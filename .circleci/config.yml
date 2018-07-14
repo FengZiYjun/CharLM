@@ -12,4 +12,35 @@ jobs:
              conda install pytorch-cpu torchvision-cpu -c pytorch
              conda install numpy -I
              echo "complete"
+    
 
+version: 2
+jobs:
+  build:
+    docker:
+      - image: continuumio/miniconda3
+    steps:
+      - checkout
+      - run: echo "A first hello"
+      - run:
+          commend: conda create -n conda_env
+      - run: 
+          commend: source activate conda_env
+      - run:
+          commend: conda install pytorch-cpu torchvision-cpu -c pytorch
+      - run:
+          commend: conda install numpy -I
+  test:
+    docker:
+      - image: continuumio/miniconda3
+    steps:
+      - checkout
+      - run: echo "complete"
+      - run: python train.py
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test
