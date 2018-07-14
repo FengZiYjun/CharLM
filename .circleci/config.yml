@@ -2,7 +2,14 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6.6-stretch-browsers
+      - image: continuumio/miniconda3
     steps:
       - checkout
       - run: echo "A first hello"
+             conda create -n conda_env
+             source activate conda_env
+
+             conda install pytorch-cpu torchvision-cpu -c pytorch
+             conda install numpy -I
+             echo "complete"
+
